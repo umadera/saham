@@ -7,7 +7,9 @@ import altair as alt
 import time
 import json
 import os
+import base64 # 🟢 Import baru untuk fitur Print Full Table
 import streamlit.components.v1 as components 
+import screener_teknikal # 🟢 Panggil file screener teknikal
 
 # Mengatur konfigurasi halaman website
 st.set_page_config(page_title="Screener Saham Pro", page_icon="📈", layout="wide")
@@ -45,7 +47,6 @@ def simpan_api_key(key):
     with open(FILE_DATABASE, "w") as f:
         json.dump(data, f)
 
-# 🟢 FITUR BARU: FUNGSI MEMORI UNTUK WATCHLIST FAVORIT
 def muat_watchlist():
     default_wl = "BBCA, BMRI, BREN, CUAN, AMMN, TLKM, ASII, GOTO, PGAS"
     if os.path.exists(FILE_DATABASE):
@@ -145,7 +146,7 @@ def style_warna_broker(val):
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = muat_api_key()
 if 'watchlist' not in st.session_state:
-    st.session_state['watchlist'] = muat_watchlist() # 🟢 Memori Watchlist
+    st.session_state['watchlist'] = muat_watchlist()
 if 'data_bandarmologi' not in st.session_state:
     st.session_state['data_bandarmologi'] = None
 if 'multi_screener_data' not in st.session_state:
@@ -170,8 +171,8 @@ if pilihan_menu == "🏠 Dashboard":
     st.success("Dashboard aktif! (Fitur IHSG disembunyikan sementara agar kode ringkas)")
 
 elif pilihan_menu == "📊 Screener Teknikal":
-    st.title("Screener Teknikal")
-    st.success("Mesin Teknikal aktif! (Disembunyikan sementara agar kode ringkas)")
+    # 🟢 Cukup panggil fungsinya di sini, kode utama tetap bersih!
+    screener_teknikal.jalankan_teknikal()
 
 elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
     if st.session_state['api_key'] == '':
@@ -191,10 +192,8 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             
             tickers_to_scan = []
             if "Watchlist" in mode_scan:
-                # 🟢 UPDATE: Menyambungkan Text Area dengan Memori (Session State)
                 multi_emiten = st.text_area("Ketik Kode Saham (Pisahkan dengan koma):", value=st.session_state['watchlist'])
                 
-                # Simpan otomatis jika ada perubahan
                 if multi_emiten != st.session_state['watchlist']:
                     st.session_state['watchlist'] = multi_emiten
                     simpan_watchlist(multi_emiten)
@@ -298,21 +297,75 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 if screener_results:
                     df_screener = pd.DataFrame(screener_results)
                     df_screener = df_screener.sort_values(by="Probabilitas 🎯", ascending=False).reset_index(drop=True)
-                    
-                    df_display = df_screener.copy()
-                    df_display['Probabilitas 🎯'] = df_display['Probabilitas 🎯'].apply(lambda x: f"{x:.1f}%")
-                    df_display['Net Volume (Rp)'] = df_display['Net Volume (Rp)'].apply(format_rupiah)
-                    df_display['Top 5 Akumulasi'] = df_display['Top 5 Akumulasi'].apply(format_rupiah)
-                    df_display['Top 5 Distribusi'] = df_display['Top 5 Distribusi'].apply(format_rupiah)
-                    
-                    st.session_state['multi_screener_data'] = df_display
+                    st.session_state['multi_screener_data'] = df_screener
                 else:
                     st.session_state['multi_screener_data'] = "KOSONG"
 
+        # 🟢 MENAMPILKAN TABEL SCREENER MASSAL & FITUR CETAK FULL PDF
         if st.session_state['multi_screener_data'] is not None:
             if isinstance(st.session_state['multi_screener_data'], pd.DataFrame):
-                st.success("🎯 **LEADERBOARD SAHAM BERPOTENSI TERBANG:** (Pilih saham dari daftar ini, lalu bedah detailnya di kotak bawah)")
-                st.dataframe(st.session_state['multi_screener_data'], use_container_width=True)
+                
+                # Memformat DataFrame agar tampil cantik
+                df_display = st.session_state['multi_screener_data'].copy()
+                df_display['Probabilitas 🎯'] = df_display['Probabilitas 🎯'].apply(lambda x: f"{x:.1f}%")
+                df_display['Net Volume (Rp)'] = df_display['Net Volume (Rp)'].apply(format_rupiah)
+                df_display['Top 5 Akumulasi'] = df_display['Top 5 Akumulasi'].apply(format_rupiah)
+                df_display['Top 5 Distribusi'] = df_display['Top 5 Distribusi'].apply(format_rupiah)
+                
+                # --- LOGIKA PRINT FULL TABEL ---
+                html_table = df_display.to_html(index=False)
+                b64_table = base64.b64encode(html_table.encode('utf-8')).decode('utf-8')
+                
+                js_print_code = f"""
+                <script>
+                function printFullTable() {{
+                    var tableHtml = atob('{b64_table}');
+                    var win = window.open('', '', 'height=800,width=1000');
+                    win.document.write('<html><head><title>Laporan Auto-Screener</title>');
+                    win.document.write('<style>');
+                    win.document.write('body {{ font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 30px; }}');
+                    win.document.write('table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}');
+                    win.document.write('th, td {{ border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }}');
+                    win.document.write('th {{ background-color: #f1f5f9; color: #1e293b; font-weight: bold; border-bottom: 2px solid #94a3b8; }}');
+                    win.document.write('h2 {{ color: #0f172a; text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }}');
+                    win.document.write('tr:nth-child(even) {{ background-color: #f8fafc; }}');
+                    win.document.write('</style></head><body>');
+                    win.document.write('<h2>🚀 LAPORAN AUTO-SCREENER BANDARMOLOGI</h2>');
+                    win.document.write(tableHtml);
+                    win.document.write('<div style="text-align: center; margin-top: 30px; font-size: 11px; color: #64748b;">Dicetak secara otomatis oleh Sistem Scalper Pro pada: ' + new Date().toLocaleString() + '</div>');
+                    win.document.write('</body></html>');
+                    win.document.close();
+                    
+                    setTimeout(function() {{
+                        win.print();
+                    }}, 500);
+                }}
+                </script>
+                <div style="text-align: right;">
+                    <button onclick="printFullTable()" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 11px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.15); width: 100%;">
+                        🖨️ Cetak Full Tabel (PDF)
+                    </button>
+                </div>
+                """
+
+                col_lead_msg, col_lead_csv, col_lead_pdf = st.columns([5, 2, 2])
+                with col_lead_msg:
+                    st.success("🎯 **LEADERBOARD SAHAM:**")
+                with col_lead_csv:
+                    # Tombol Native Download CSV Streamlit
+                    csv_data = df_display.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="💾 Download Excel (CSV)",
+                        data=csv_data,
+                        file_name=f"screener_bandar_{datetime.date.today()}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                with col_lead_pdf:
+                    # Tombol Print Full PDF dari JS
+                    components.html(js_print_code, height=55)
+
+                st.dataframe(df_display, use_container_width=True)
                 st.write("---")
             elif st.session_state['multi_screener_data'] == "KOSONG":
                 st.warning("Tidak ada data ditemukan untuk daftar saham tersebut di tanggal ini.")
@@ -510,16 +563,17 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             with col_alert:
                 st.success(f"✅ Data ditarik! Rentang: **{start_date_res.strftime('%d %b %Y')}** s/d **{end_date_res.strftime('%d %b %Y')}**")
             with col_print:
+                # Tombol Print Khusus Dashboard Bawah (Hanya Print Layar Visible)
                 components.html(
                     """
                     <script>
-                    function printLaporan() {
+                    function printDashboard() {
                         window.parent.print();
                     }
                     </script>
                     <div style="text-align: right; padding-top: 2px;">
-                        <button onclick="printLaporan()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.15); width: 100%;">
-                            🖨️ Cetak PDF / JPG
+                        <button onclick="printDashboard()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.15); width: 100%;">
+                            🖨️ Cetak Dashboard
                         </button>
                     </div>
                     """,
