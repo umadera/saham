@@ -34,8 +34,40 @@ def muat_api_key():
     return ""
 
 def simpan_api_key(key):
+    data = {}
+    if os.path.exists(FILE_DATABASE):
+        try:
+            with open(FILE_DATABASE, "r") as f:
+                data = json.load(f)
+        except:
+            pass
+    data["api_key"] = key
     with open(FILE_DATABASE, "w") as f:
-        json.dump({"api_key": key}, f)
+        json.dump(data, f)
+
+# 🟢 FITUR BARU: FUNGSI MEMORI UNTUK WATCHLIST FAVORIT
+def muat_watchlist():
+    default_wl = "BBCA, BMRI, BREN, CUAN, AMMN, TLKM, ASII, GOTO, PGAS"
+    if os.path.exists(FILE_DATABASE):
+        try:
+            with open(FILE_DATABASE, "r") as f:
+                data = json.load(f)
+                return data.get("watchlist", default_wl)
+        except:
+            pass
+    return default_wl
+
+def simpan_watchlist(wl):
+    data = {}
+    if os.path.exists(FILE_DATABASE):
+        try:
+            with open(FILE_DATABASE, "r") as f:
+                data = json.load(f)
+        except:
+            pass
+    data["watchlist"] = wl
+    with open(FILE_DATABASE, "w") as f:
+        json.dump(data, f)
 
 # ==============================================================================
 # 📦 DATA UTAMA BROKER BEI (KODE & NAMA UPDATE TERLENGKAP IDX)
@@ -112,6 +144,8 @@ def style_warna_broker(val):
 # --- MEMBUAT FITUR "INGATAN" (SESSION STATE) ---
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = muat_api_key()
+if 'watchlist' not in st.session_state:
+    st.session_state['watchlist'] = muat_watchlist() # 🟢 Memori Watchlist
 if 'data_bandarmologi' not in st.session_state:
     st.session_state['data_bandarmologi'] = None
 if 'multi_screener_data' not in st.session_state:
@@ -157,7 +191,14 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             
             tickers_to_scan = []
             if "Watchlist" in mode_scan:
-                multi_emiten = st.text_area("Ketik Kode Saham (Pisahkan dengan koma):", "BBCA, BMRI, BREN, CUAN, AMMN, TLKM, ASII, GOTO, PGAS")
+                # 🟢 UPDATE: Menyambungkan Text Area dengan Memori (Session State)
+                multi_emiten = st.text_area("Ketik Kode Saham (Pisahkan dengan koma):", value=st.session_state['watchlist'])
+                
+                # Simpan otomatis jika ada perubahan
+                if multi_emiten != st.session_state['watchlist']:
+                    st.session_state['watchlist'] = multi_emiten
+                    simpan_watchlist(multi_emiten)
+                    
                 tickers_to_scan = [t.strip().upper() for t in multi_emiten.split(',') if t.strip()]
             else:
                 pilihan_indeks = st.selectbox("Pilih Indeks Bursa:", ["LQ45 (45 Saham Paling Likuid)", "IDX30 (30 Saham Bluechip)", "Scalper Hotlist (Volatilitas Tinggi)"])
@@ -732,7 +773,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             st.markdown("### 📋 Detail Transaksi (Klasik View)")
             style_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
 
-            # --- Sisi AKUMULASI (BUY) ---
             df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
             df_buy.columns = ['Buy', 'B.Val', 'B.Lot', 'B.Avg']
             
@@ -741,7 +781,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             else:
                 df_buy['B.%'] = 0.0
 
-            # --- Sisi DISTRIBUSI (SELL) ---
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
             df_sell['Net Lot'] = df_sell['Net Lot'].abs()
             df_sell.columns = ['Sell', 'S.Val', 'S.Lot', 'S.Avg']
@@ -751,7 +790,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             else:
                 df_sell['S.%'] = 0.0
 
-            # Fungsi Pewarnaan Persentase
             def color_pct(val):
                 if val > 0:
                     return 'color: #2ecc71; font-weight: bold;'
@@ -1092,4 +1130,4 @@ elif pilihan_menu == "⚙️ Pengaturan API":
     if st.button("Simpan API Key Permanen"):
         st.session_state['api_key'] = api_key_input
         simpan_api_key(api_key_input)
-        st.success("✅ API Key berhasil disimpan ke sistem! Anda tidak perlu memasukkannya lagi saat membuka aplikasi. Silakan kembali ke menu Screener.")
+        st.success("✅ API Key berhasil disimpan ke sistem! Anda tidak perlu memasukkannya lagi saat membuka aplikasi.")
