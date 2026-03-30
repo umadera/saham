@@ -118,7 +118,7 @@ if 'multi_screener_data' not in st.session_state:
     st.session_state['multi_screener_data'] = None
 
 # ==============================================================================
-# 📊 MEMBUAT SIDEBAR MENU (DIKEMBALIKAN MENJADI 4 MENU)
+# 📊 MEMBUAT SIDEBAR MENU
 # ==============================================================================
 st.sidebar.title("Navigasi Utama")
 pilihan_menu = st.sidebar.radio(
@@ -140,19 +140,14 @@ elif pilihan_menu == "📊 Screener Teknikal":
     st.success("Mesin Teknikal aktif! (Disembunyikan sementara agar kode ringkas)")
 
 elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
-    st.title("Screener Bandarmologi Pro 🕵️‍♂️")
-    st.markdown("Menganalisa jejak **Akumulasi (Net Buy)** & **Distribusi (Net Sell)** Bandar secara mendalam.")
-    
     if st.session_state['api_key'] == '':
         st.warning("⚠️ Silakan masukkan API Key Invezgo Anda di menu 'Pengaturan API' terlebih dahulu.")
     else:
         # ==============================================================================
-        # 🚀 BAGIAN 1: AUTO-SCREENER MASSAL
+        # 🚀 AUTO-SCREENER MASSAL
         # ==============================================================================
-        st.markdown("### 🚀 AUTO-SCREENER SAHAM MASSAL")
-        st.markdown("Pindai puluhan saham sekaligus untuk mencari probabilitas kenaikan tertinggi hari ini!")
-        
-        with st.expander("Klik untuk Buka Panel Auto-Screener", expanded=False):
+        with st.expander("🚀 Buka Panel Auto-Screener Saham Massal", expanded=False):
+            st.markdown("Pindai puluhan saham sekaligus untuk mencari probabilitas kenaikan tertinggi hari ini!")
             col_mode1, col_mode2 = st.columns([1, 1])
             with col_mode1:
                 mode_scan = st.radio("Pilih Mode Pemindaian:", ["📝 Watchlist Favorit (Manual)", "📊 Indeks IDX Otomatis"])
@@ -273,33 +268,34 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 else:
                     st.session_state['multi_screener_data'] = "KOSONG"
 
-        # Menampilkan Tabel Screener Massal (Akan terus tampil berkat session_state)
         if st.session_state['multi_screener_data'] is not None:
             if isinstance(st.session_state['multi_screener_data'], pd.DataFrame):
                 st.success("🎯 **LEADERBOARD SAHAM BERPOTENSI TERBANG:** (Pilih saham dari daftar ini, lalu bedah detailnya di kotak bawah)")
                 st.dataframe(st.session_state['multi_screener_data'], use_container_width=True)
+                st.write("---")
             elif st.session_state['multi_screener_data'] == "KOSONG":
                 st.warning("Tidak ada data ditemukan untuk daftar saham tersebut di tanggal ini.")
-
-        st.write("---")
+                st.write("---")
 
         # ==============================================================================
-        # 🔍 BAGIAN 2: FITUR ANALISA MENDALAM (SINGLE ANALYZER) 
+        # 🔍 ANALISA MENDALAM (SINGLE ANALYZER) 
         # ==============================================================================
-        st.markdown("### 🔍 Parameter Pencarian (Single Analyzer)")
         with st.container():
-            col_inp1, col_inp2 = st.columns([1, 2])
+            col_inp1, col_inp2, col_inp3 = st.columns([1.5, 2, 1])
             with col_inp1:
                 emiten_input = st.text_input("Kode Saham Tunggal:", "BREN").upper()
             with col_inp2:
                 kemarin = datetime.date.today() - datetime.timedelta(days=1)
                 tanggal_input = st.date_input(
-                    "Pilih Rentang Tanggal (Bisa Mingguan/Bulanan):", 
+                    "Pilih Rentang Tanggal:", 
                     value=(kemarin, kemarin),
                     max_value=datetime.date.today()
                 )
+            with col_inp3:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                btn_single = st.button("🚀 Analisa Jejak Bandar", use_container_width=True)
         
-        if st.button("🚀 Analisa Jejak Bandar", use_container_width=True):
+        if btn_single:
             if len(tanggal_input) == 2:
                 start_date, end_date = tanggal_input
             elif len(tanggal_input) == 1:
@@ -370,6 +366,8 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                         pass 
 
                 df_trend = pd.DataFrame()
+                df_broker_daily = pd.DataFrame()
+                
                 if data_ditemukan:
                     try:
                         my_bar.progress(80, text="Membongkar Data Historis Harian...")
@@ -395,6 +393,8 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                             broker_hist = data_trend.get('broker', [])
                             
                             daily_dict = {}
+                            broker_daily_list = []
+                            
                             for b in broker_hist:
                                 b_code = b.get('broker', '')
                                 if b_code in top_acc_list or b_code in top_dist_list:
@@ -410,9 +410,20 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                                         if b_code in top_dist_list:
                                             daily_dict[dt]['Distribusi (Top 5)'] += val 
                                             
+                                        broker_daily_list.append({
+                                            'Date': dt,
+                                            'Broker': b_code,
+                                            'Value': val,
+                                            'Tipe': get_kategori_broker(b_code)[0]
+                                        })
+                                            
                             df_trend = pd.DataFrame(list(daily_dict.values()))
                             if not df_trend.empty:
                                 df_trend = df_trend.sort_values('Date')
+                                
+                            df_broker_daily = pd.DataFrame(broker_daily_list)
+                            if not df_broker_daily.empty:
+                                df_broker_daily = df_broker_daily.sort_values('Date')
                     except Exception as e:
                         pass 
 
@@ -436,12 +447,12 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                         'df_akumulasi': df_akumulasi, 'df_distribusi': df_distribusi,
                         'df_akumulasi_top5': df_akumulasi.head(5), 'df_distribusi_top5': df_distribusi.head(5),
                         'current_price': current_price,
-                        'df_trend': df_trend 
+                        'df_trend': df_trend,
+                        'df_broker_daily': df_broker_daily 
                     }
                 else:
                     st.session_state['data_bandarmologi'] = "KOSONG"
 
-        # 🟢 MENAMPILKAN HASIL SINGLE ANALYZER DARI INGATAN
         if st.session_state['data_bandarmologi'] == "KOSONG":
             st.warning("Data kosong. Bursa mungkin libur atau saham tersebut sedang suspend/tidak ada transaksi pada rentang tanggal yang dipilih.")
         
@@ -452,6 +463,7 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             df_akumulasi_top5, df_distribusi_top5 = db['df_akumulasi_top5'], db['df_distribusi_top5']
             current_price = db.get('current_price', 0)
             df_trend = db.get('df_trend', pd.DataFrame())
+            df_broker_daily = db.get('df_broker_daily', pd.DataFrame())
 
             col_alert, col_print = st.columns([4, 1])
             with col_alert:
@@ -667,16 +679,85 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 else:
                     st.info("Tidak ada data Net Sell.")
 
+            if not df_broker_daily.empty:
+                st.write("---")
+                st.markdown("### 🕵️‍♂️ Radar Histori Harian per Broker")
+                
+                gabungan_broker_top = list(dict.fromkeys(df_akumulasi_top5['Broker'].tolist() + df_distribusi_top5['Broker'].tolist()))
+                
+                col_sel1, col_sel2 = st.columns([1, 2])
+                with col_sel1:
+                    broker_pilihan = st.selectbox("Pilih Broker dari Top 5:", gabungan_broker_top)
+                
+                with col_sel2:
+                    st.markdown(f"<div style='margin-top: 35px; font-size: 14px; color: #94a3b8;'>Menganalisa jejak **{broker_pilihan}** dari tanggal {start_date_res.strftime('%d %b')} s/d {end_date_res.strftime('%d %b')}. Grafik <span style='color:#2ecc71; font-weight:bold;'>Hijau</span> berarti Net Buy, <span style='color:#e74c3c; font-weight:bold;'>Merah</span> berarti Net Sell.</div>", unsafe_allow_html=True)
+
+                df_bd = df_broker_daily[df_broker_daily['Broker'] == broker_pilihan].copy()
+                
+                if not df_bd.empty:
+                    df_bd['Warna_Bar'] = df_bd['Value'].apply(lambda x: '#2ecc71' if x >= 0 else '#e74c3c')
+                    df_bd['Status_Aksi'] = df_bd['Value'].apply(lambda x: 'Net Buy' if x >= 0 else 'Net Sell')
+                    df_bd['Label_Rp'] = df_bd['Value'].apply(lambda x: format_rupiah(x))
+                    
+                    chart_bd = alt.Chart(df_bd).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=40).encode(
+                        x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
+                        y=alt.Y('Value:Q', title='Net Value (Rp)', axis=alt.Axis(format='~s')),
+                        color=alt.Color('Warna_Bar:N', scale=None),
+                        tooltip=['Date', 'Broker', 'Status_Aksi', alt.Tooltip('Value:Q', format=',.0f', title='Nilai Rp')]
+                    ).properties(height=350)
+                    
+                    text_bd_pos = alt.Chart(df_bd[df_bd['Value'] >= 0]).mark_text(fontWeight='bold', fontSize=12, dy=-12, color='white').encode(
+                        x=alt.X('Date:O'),
+                        y=alt.Y('Value:Q'),
+                        text=alt.Text('Label_Rp:N')
+                    )
+
+                    text_bd_neg = alt.Chart(df_bd[df_bd['Value'] < 0]).mark_text(fontWeight='bold', fontSize=12, dy=12, color='white').encode(
+                        x=alt.X('Date:O'),
+                        y=alt.Y('Value:Q'),
+                        text=alt.Text('Label_Rp:N')
+                    )
+                    
+                    rule_nol = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
+                    
+                    st.altair_chart(chart_bd + text_bd_pos + text_bd_neg + rule_nol, use_container_width=True)
+                else:
+                    st.info(f"Broker {broker_pilihan} tidak melakukan transaksi di rentang tanggal ini.")
+
+
+            # ==================================================================
+            # 📋 UI TABEL BERDAMPINGAN DENGAN FITUR PERSENTASE (PnL)
+            # ==================================================================
             st.write("---")
             st.markdown("### 📋 Detail Transaksi (Klasik View)")
             style_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
 
+            # --- Sisi AKUMULASI (BUY) ---
             df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
             df_buy.columns = ['Buy', 'B.Val', 'B.Lot', 'B.Avg']
             
+            if current_price > 0:
+                df_buy['B.%'] = df_buy['B.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
+            else:
+                df_buy['B.%'] = 0.0
+
+            # --- Sisi DISTRIBUSI (SELL) ---
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
             df_sell['Net Lot'] = df_sell['Net Lot'].abs()
             df_sell.columns = ['Sell', 'S.Val', 'S.Lot', 'S.Avg']
+            
+            if current_price > 0:
+                df_sell['S.%'] = df_sell['S.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
+            else:
+                df_sell['S.%'] = 0.0
+
+            # Fungsi Pewarnaan Persentase
+            def color_pct(val):
+                if val > 0:
+                    return 'color: #2ecc71; font-weight: bold;'
+                elif val < 0:
+                    return 'color: #e74c3c; font-weight: bold;'
+                return 'color: #94a3b8; font-weight: bold;'
 
             col_tabel1, col_tabel2 = st.columns(2)
             
@@ -684,14 +765,16 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 AKUMULASI (BUY)</h5>", unsafe_allow_html=True)
                 styler_buy = getattr(df_buy.style, style_method)(style_warna_broker, subset=['Buy'])
                 styler_buy = getattr(styler_buy, style_method)(lambda x: 'color: #2ecc71; font-weight: bold;', subset=['B.Val', 'B.Lot', 'B.Avg'])
-                styler_buy = styler_buy.format({'B.Val': 'Rp {:,.0f}', 'B.Lot': '{:,.0f}', 'B.Avg': 'Rp {:,.0f}'})
+                styler_buy = getattr(styler_buy, style_method)(color_pct, subset=['B.%'])
+                styler_buy = styler_buy.format({'B.Val': 'Rp {:,.0f}', 'B.Lot': '{:,.0f}', 'B.Avg': 'Rp {:,.0f}', 'B.%': '{:+.2f}%'})
                 st.dataframe(styler_buy, use_container_width=True, hide_index=True)
 
             with col_tabel2:
                 st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DISTRIBUSI (SELL)</h5>", unsafe_allow_html=True)
                 styler_sell = getattr(df_sell.style, style_method)(style_warna_broker, subset=['Sell'])
                 styler_sell = getattr(styler_sell, style_method)(lambda x: 'color: #e74c3c; font-weight: bold;', subset=['S.Val', 'S.Lot', 'S.Avg'])
-                styler_sell = styler_sell.format({'S.Val': 'Rp {:,.0f}', 'S.Lot': '{:,.0f}', 'S.Avg': 'Rp {:,.0f}'})
+                styler_sell = getattr(styler_sell, style_method)(color_pct, subset=['S.%'])
+                styler_sell = styler_sell.format({'S.Val': 'Rp {:,.0f}', 'S.Lot': '{:,.0f}', 'S.Avg': 'Rp {:,.0f}', 'S.%': '{:+.2f}%'})
                 st.dataframe(styler_sell, use_container_width=True, hide_index=True)
 
             st.markdown("""
@@ -888,8 +971,8 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
 
             if not df_trend.empty:
                 st.write("---")
-                st.markdown("### 📈 Tren Akumulasi Harian (Time-Series)")
-                st.markdown("Memantau pergerakan **Top 5 Akumulator** vs **Top 5 Distributor** dari hari ke hari. Angka persen (%) menunjukkan seberapa dominan kekuatan beli/jual di hari tersebut.")
+                st.markdown("### 📈 Tren Akumulasi Harian Gabungan (Top 5)")
+                st.markdown("Memantau pergerakan **Total Top 5 Akumulator** vs **Total Top 5 Distributor** secara gabungan dari hari ke hari.")
                 
                 df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
                 df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
