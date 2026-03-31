@@ -47,7 +47,7 @@ def detect_patterns(curr, prev):
 
 # 🟢 FUNGSI KHUSUS UNTUK MESIN COPET KILAT
 def jalankan_mesin_copet(nama_sektor, daftar_ticker):
-    st.write(f"Mencari peluang copet terbaik di **{nama_sektor}** (TF: 5 Menit)...")
+    st.markdown(f"#### 🔍 Memindai Peluang di: **{nama_sektor}** (TF 5 Menit)")
     bar_instan = st.progress(0, text="Mengumpulkan data Market Real-Time...")
     hasil_instan = []
 
@@ -68,6 +68,18 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
                 cur_price = float(last_c['Close'])
                 vwap_price = float(last_c['VWAP'])
                 
+                # 🟢 KALKULASI PERSENTASE KENAIKAN HARI INI
+                try:
+                    dates = pd.Series(df.index.date).unique()
+                    if len(dates) > 1:
+                        prev_date = dates[-2]
+                        prev_close = df[df.index.date == prev_date]['Close'].iloc[-1]
+                    else:
+                        prev_close = df['Open'].iloc[0]
+                    pct_change = ((cur_price - prev_close) / prev_close) * 100
+                except:
+                    pct_change = 0.0
+
                 score = 0
                 alasan = []
 
@@ -79,9 +91,9 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
                     score -= 2
                     
                 if cur_price >= vwap_price: score += 1; alasan.append("Aman di atas VWAP")
-                if last_c['RSI'] < 30: score += 2; alasan.append("Oversold")
+                if last_c['RSI'] < 30: score += 2; alasan.append("Oversold (Murah)")
                 if last_c['MACD'] > last_c['Signal']: score += 1; alasan.append("MACD Bullish")
-                if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Volume Surge")
+                if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Lonjakan Volume")
                 
                 pola = detect_patterns(last_c, prev_c)
                 if pola != "-": score += 2; alasan.append(pola)
@@ -92,7 +104,8 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
                     hasil_instan.append({
                         "Saham": ticker, "Harga": cur_price, "VWAP": vwap_price,
                         "Support": support, "Score": score,
-                        "Alasan": " + ".join(alasan) if alasan else "Momentum Netral"
+                        "Alasan": " + ".join(alasan) if alasan else "Momentum Netral",
+                        "Pct_Change": pct_change # 🟢 Simpan Persentase
                     })
         except Exception as e:
             pass
@@ -103,28 +116,51 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
         hasil_instan.sort(key=lambda x: x['Score'], reverse=True)
         top_5 = hasil_instan[:5] # Selalu ambil 5 terbaik
         
-        st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik dari {nama_sektor}:**")
+        st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik:**")
         
         for rank, item in enumerate(top_5):
-            plan_entry = f"HAKA" if item['Harga'] > item['VWAP'] else "BOW (Tunggu Pantulan)"
+            plan_entry = f"HAKA" if item['Harga'] > item['VWAP'] else "BOW (Pantulan)"
             cutloss = item['Support'] * 0.98
             target = item['Harga'] * 1.03
             
-            # 🟢 FIX HTML: Dihapus semua indentasi kiri agar tidak bocor jadi Code Block
-            card_html = f"""<div style="background-color: #f8fafc; border-left: 5px solid #22c55e; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-<h4 style="margin-top: 0; color: #1e293b;">#{rank+1} &nbsp; <b>{item['Saham']}</b> &nbsp; <span style="font-size:14px; color:#64748b; font-weight:normal;">(Skor AI: {item['Score']}/10)</span></h4>
-<div style="display:flex; justify-content:space-between; margin-top:10px; flex-wrap:wrap; gap:10px;">
-<div><b>Harga:</b> Rp {item['Harga']:,.0f}</div>
-<div><b>VWAP:</b> Rp {item['VWAP']:,.0f}</div>
-<div><b style="color:#22c55e;">Aksi:</b> {plan_entry}</div>
-<div><b style="color:#ef4444;">Cutloss:</b> < Rp {cutloss:,.0f}</div>
-<div><b style="color:#3b82f6;">Target:</b> Rp {target:,.0f}</div>
-</div>
-<div style="margin-top:10px; font-size:13px; color:#f59e0b;"><b>Sinyal:</b> {item['Alasan']}</div>
-</div>"""
+            # 🟢 LOGIKA WARNA PERSENTASE
+            pct_val = item['Pct_Change']
+            pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
+            pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
+            pct_sign = "+" if pct_val > 0 else ""
+            
+            pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
+            
+            card_html = f"""
+            <div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+                <div style="min-width: 150px;">
+                    <div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI: <span style="color: #f59e0b; font-size: 14px;">{item['Score']}/10</span></div>
+                </div>
+                <div style="text-align: center; min-width: 80px;">
+                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Harga</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div>
+                </div>
+                <div style="text-align: center; min-width: 80px;">
+                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Aksi Entry</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #22c55e;">{plan_entry}</div>
+                </div>
+                <div style="text-align: center; min-width: 80px;">
+                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Target Jual</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #3b82f6;">{target:,.0f}</div>
+                </div>
+                <div style="text-align: center; min-width: 80px;">
+                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Titik Cutloss</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f}</div>
+                </div>
+                <div style="width: 100%; font-size: 13px; color: #475569; background: #f8fafc; padding: 10px 15px; border-radius: 6px; margin-top: 5px; border: 1px solid #f1f5f9;">
+                    🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']} &nbsp;|&nbsp; <b>VWAP:</b> Rp {item['VWAP']:,.0f}
+                </div>
+            </div>
+            """
             st.markdown(card_html, unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham di {nama_sektor} yang memenuhi kriteria copet saat ini.")
+        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham di kategori ini yang memenuhi kriteria momentum copet.")
 
 
 # --- FUNGSI UTAMA HALAMAN TEKNIKAL ---
@@ -134,7 +170,6 @@ def jalankan_teknikal():
     if 'teknikal_date' not in st.session_state: st.session_state['teknikal_date'] = None
     if 'teknikal_tf' not in st.session_state: st.session_state['teknikal_tf'] = None
     
-    # 🟢 DATABASE SEKTOR DINAMIS (Disimpan di Memori)
     if 'db_sektor' not in st.session_state:
         st.session_state['db_sektor'] = {
             "🪙 Logam & Emas": ["MDKA", "PSAB", "BRMS", "ARCI", "ANTM", "INCO", "HRUM", "MBMA", "NCKL", "TINS"],
@@ -148,76 +183,63 @@ def jalankan_teknikal():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 25px 30px; border-radius: 12px; border-left: 8px solid #f59e0b; margin-bottom: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.2);">
         <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V3.0 ⚡</h2>
-        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Gunakan Tab <b>Top 5 Copet Kilat</b> untuk mencari sinyal instan dari saham favorit Anda untuk di-tradingkan hari ini!</p>
+        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Gunakan Tab <b>Top 5 Copet Kilat</b> untuk mencari sinyal instan dari saham favorit atau sektor pilihan Anda!</p>
     </div>
     """, unsafe_allow_html=True)
 
     tab_instan, tab_massal, tab_single = st.tabs(["🚀 Top 5 Copet Kilat (Instan)", "⚙️ Mass Screener (Advance)", "🔍 Bedah Chart Tunggal"])
 
     # ==============================================================================
-    # TAB 1: TOP 5 COPET KILAT (KARTU SEKTORAL UNIK & CUSTOM)
+    # TAB 1: TOP 5 COPET KILAT (PANEL KONTROL SIMPEL)
     # ==============================================================================
     with tab_instan:
-        st.markdown("### ⭐ Cari Saham Copet Terbaik Hari Ini")
-        
-        default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
-        
-        if st.button("🚀 CARI DARI WATCHLIST FAVORIT SAYA", type="primary", use_container_width=True):
-            tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
-            if not tickers: st.error("Watchlist Anda kosong! Silakan atur daftar saham di Tab 'Mass Screener'.")
-            else: jalankan_mesin_copet("Watchlist Favorit", tickers)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("---")
-
-        # 🟢 BAGIAN MANAJEMEN SEKTOR (ICON KANAN ATAS)
-        col_title, col_manage = st.columns([3, 1])
+        col_title, col_manage = st.columns([4, 1.5])
         with col_title:
-            st.markdown("### 🗂️ Radar Copet Sektoral")
-            st.write("Klik salah satu kartu di bawah untuk mencari 5 saham terbaik di sektor tersebut.")
+            st.markdown("### 🎯 Mesin Copet Instan")
         with col_manage:
-            st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("⚙️ Kelola & Tambah Sektor"):
-                st.markdown("#### ➕ Tambah Sektor Baru")
-                new_sec_name = st.text_input("Nama Sektor (Cth: 🚀 AI Tech)")
-                new_sec_stocks = st.text_input("Kode Saham (Pisahkan dengan koma)")
-                if st.button("💾 Simpan Sektor Baru", use_container_width=True):
+            with st.expander("⚙️ Kelola Kategori"):
+                st.markdown("#### ➕ Tambah")
+                new_sec_name = st.text_input("Nama Kategori", placeholder="Cth: 🚀 Saham AI")
+                new_sec_stocks = st.text_input("Kode Saham", placeholder="GOTO, BUKA")
+                if st.button("💾 Simpan", use_container_width=True):
                     if new_sec_name and new_sec_stocks:
                         st.session_state['db_sektor'][new_sec_name] = [s.strip().upper() for s in new_sec_stocks.split(",")]
-                        st.success(f"Sektor {new_sec_name} ditambahkan!")
+                        st.rerun()
                 
                 st.markdown("---")
-                st.markdown("#### 📝 Edit Sektor yang Ada")
-                for sec_name, sec_stocks in list(st.session_state['db_sektor'].items()):
-                    edit_stocks = st.text_input(f"Edit Saham: {sec_name}", value=", ".join(sec_stocks), key=f"edit_{sec_name}")
-                    if edit_stocks != ", ".join(sec_stocks):
-                        st.session_state['db_sektor'][sec_name] = [s.strip().upper() for s in edit_stocks.split(",")]
-                    
-                    if st.button(f"🗑️ Hapus Sektor {sec_name}", key=f"del_{sec_name}"):
-                        del st.session_state['db_sektor'][sec_name]
-                        st.rerun() # Memuat ulang agar kartu langsung hilang
+                st.markdown("#### 🗑️ Hapus")
+                sektor_to_delete = st.selectbox("Pilih Kategori:", list(st.session_state['db_sektor'].keys()))
+                if st.button("Hapus Kategori", type="secondary", use_container_width=True):
+                    if sektor_to_delete in st.session_state['db_sektor']:
+                        del st.session_state['db_sektor'][sektor_to_delete]
+                        st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
-
-        # 🟢 GRID KARTU SEKTOR UNIK (MENGGABUNGKAN HTML & STREAMLIT BUTTON)
-        sektor_items = list(st.session_state['db_sektor'].items())
-        cols = st.columns(3)
         
-        for i, (nama_sektor, saham_list) in enumerate(sektor_items):
-            with cols[i % 3]:
-                # Desain Kartu HTML Unik (Bagian Atas)
-                # Dibuat rapat rata kiri agar tidak bocor jadi Code Block
-                html_kartu = f"""<div style="background: linear-gradient(135deg, #ffffff, #f1f5f9); padding: 15px; border-radius: 12px 12px 0 0; border-top: 5px solid #3b82f6; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; text-align: center; height: 110px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-<div style="font-size: 16px; font-weight: 900; color: #1e293b; margin-bottom: 8px;">{nama_sektor}</div>
-<div style="font-size: 12px; color: #64748b; line-height: 1.4; font-weight: 500;">{', '.join(saham_list[:6])}{'...' if len(saham_list)>6 else ''}</div>
-</div>"""
-                st.markdown(html_kartu, unsafe_allow_html=True)
-                
-                # Tombol Streamlit Menyatu dengan Kartu (Bagian Bawah)
-                if st.button(f"⚡ Scan {nama_sektor.split(' ')[0]}", key=f"btn_scan_{nama_sektor}", use_container_width=True):
-                    jalankan_mesin_copet(nama_sektor, saham_list)
-                
-                st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+        opsi_kategori = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
+        
+        st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
+        col_sel, col_btn = st.columns([3, 1])
+        
+        with col_sel:
+            pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
+        with col_btn:
+            eksekusi_copet = st.button("⚡ SCAN SEKARANG", type="primary", use_container_width=True)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        if eksekusi_copet:
+            st.markdown("---")
+            if pilihan_kategori == "⭐ Watchlist Favorit Saya":
+                default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
+                tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
+                if not tickers:
+                    st.error("Watchlist Anda kosong! Silakan isi di tab 'Mass Screener'.")
+                else:
+                    jalankan_mesin_copet("Watchlist Favorit Pribadi", tickers)
+            else:
+                tickers = st.session_state['db_sektor'][pilihan_kategori]
+                jalankan_mesin_copet(pilihan_kategori, tickers)
 
 
     # ==============================================================================
@@ -333,7 +355,6 @@ def jalankan_teknikal():
                 cols = st.columns(len(top_5_list))
                 for i, item in enumerate(top_5_list):
                     with cols[i]:
-                        # 🟢 FIX HTML
                         ai_card = f"""<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px 10px; border-radius: 8px; text-align: center; border-bottom: 4px solid #22c55e; box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
 <div style="font-size: 20px; font-weight: 900; color: #4ade80; letter-spacing: 1px;">{item['Saham']}</div>
 <div style="font-size: 13px; color: #94a3b8; margin-top: 5px; font-weight: bold;">{item['Harga']}</div>
@@ -417,7 +438,6 @@ def jalankan_teknikal():
                 st.plotly_chart(fig, use_container_width=True)
 
                 # --- PIVOT BOX ---
-                # 🟢 FIX HTML
                 pivot_box = f"""<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
 <div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #f59e0b; color: #1e293b;">
 <div style="font-size: 11px; font-weight: bold;">📈 RESISTANCE 2</div><div style="font-size: 18px; font-weight: 800;">Rp {r2:,.0f}</div>
