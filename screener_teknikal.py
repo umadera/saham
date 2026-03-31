@@ -45,16 +45,17 @@ def detect_patterns(curr, prev):
     elif is_doji: return "⚖️ Doji"
     else: return "-"
 
-# 🟢 FUNGSI KHUSUS UNTUK MESIN COPET KILAT
-def jalankan_mesin_copet(nama_sektor, daftar_ticker):
-    st.markdown(f"#### 🔍 Memindai Peluang di: **{nama_sektor}** (TF 5 Menit)")
+# 🟢 FUNGSI KHUSUS UNTUK MESIN COPET KILAT (Kini Mendukung Berbagai Timeframe)
+def jalankan_mesin_copet(nama_sektor, daftar_ticker, tf_label, interval_yf, period_yf):
+    st.markdown(f"#### 🔍 Memindai Peluang di: **{nama_sektor}** (TF {tf_label})")
     bar_instan = st.progress(0, text="Mengumpulkan data Market Real-Time...")
     hasil_instan = []
 
     for i, ticker in enumerate(daftar_ticker):
         bar_instan.progress((i) / len(daftar_ticker), text=f"Menganalisa momentum {ticker}...")
         try:
-            df = yf.Ticker(f"{ticker}.JK").history(period="5d", interval="5m")
+            # Menggunakan Timeframe & Periode Dinamis
+            df = yf.Ticker(f"{ticker}.JK").history(period=period_yf, interval=interval_yf)
             if not df.empty and len(df) > 25:
                 df['RSI'] = calculate_rsi(df)
                 df['MACD'], df['Signal'] = calculate_macd(df)
@@ -68,7 +69,7 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
                 cur_price = float(last_c['Close'])
                 vwap_price = float(last_c['VWAP'])
                 
-                # 🟢 KALKULASI PERSENTASE KENAIKAN HARI INI
+                # Kalkulasi Persentase Kenaikan
                 try:
                     dates = pd.Series(df.index.date).unique()
                     if len(dates) > 1:
@@ -105,7 +106,7 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
                         "Saham": ticker, "Harga": cur_price, "VWAP": vwap_price,
                         "Support": support, "Score": score,
                         "Alasan": " + ".join(alasan) if alasan else "Momentum Netral",
-                        "Pct_Change": pct_change # 🟢 Simpan Persentase
+                        "Pct_Change": pct_change
                     })
         except Exception as e:
             pass
@@ -114,7 +115,7 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
 
     if hasil_instan:
         hasil_instan.sort(key=lambda x: x['Score'], reverse=True)
-        top_5 = hasil_instan[:5] # Selalu ambil 5 terbaik
+        top_5 = hasil_instan[:5]
         
         st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik:**")
         
@@ -123,7 +124,6 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
             cutloss = item['Support'] * 0.98
             target = item['Harga'] * 1.03
             
-            # 🟢 LOGIKA WARNA PERSENTASE
             pct_val = item['Pct_Change']
             pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
             pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
@@ -160,7 +160,7 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker):
             """
             st.markdown(card_html, unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham di kategori ini yang memenuhi kriteria momentum copet.")
+        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham di kategori ini yang memenuhi kriteria momentum pada TF {tf_label}.")
 
 
 # --- FUNGSI UTAMA HALAMAN TEKNIKAL ---
@@ -190,7 +190,7 @@ def jalankan_teknikal():
     tab_instan, tab_massal, tab_single = st.tabs(["🚀 Top 5 Copet Kilat (Instan)", "⚙️ Mass Screener (Advance)", "🔍 Bedah Chart Tunggal"])
 
     # ==============================================================================
-    # TAB 1: TOP 5 COPET KILAT (PANEL KONTROL SIMPEL)
+    # TAB 1: TOP 5 COPET KILAT (PANEL KONTROL DENGAN TIMEFRAME)
     # ==============================================================================
     with tab_instan:
         col_title, col_manage = st.columns([4, 1.5])
@@ -217,18 +217,31 @@ def jalankan_teknikal():
         st.markdown("<br>", unsafe_allow_html=True)
         
         opsi_kategori = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
+        opsi_tf = ["1 Menit", "5 Menit", "30 Menit", "1 Jam"]
+        
+        # Mapping Timeframe ke Format yfinance (Interval, Period)
+        tf_map_copet = {
+            "1 Menit": ("1m", "5d"),
+            "5 Menit": ("5m", "5d"),
+            "30 Menit": ("30m", "1mo"),
+            "1 Jam": ("60m", "1mo")
+        }
         
         st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
-        col_sel, col_btn = st.columns([3, 1])
+        col_sel, col_tf, col_btn = st.columns([2, 1, 1.5])
         
         with col_sel:
             pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
+        with col_tf:
+            # 🟢 Dropdown Timeframe Baru (Default 5 Menit)
+            tf_pilihan_copet = st.selectbox("Timeframe:", opsi_tf, index=1, label_visibility="collapsed")
         with col_btn:
             eksekusi_copet = st.button("⚡ SCAN SEKARANG", type="primary", use_container_width=True)
             
         st.markdown("</div>", unsafe_allow_html=True)
         
         if eksekusi_copet:
+            interval_yf, period_yf = tf_map_copet[tf_pilihan_copet]
             st.markdown("---")
             if pilihan_kategori == "⭐ Watchlist Favorit Saya":
                 default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
@@ -236,10 +249,10 @@ def jalankan_teknikal():
                 if not tickers:
                     st.error("Watchlist Anda kosong! Silakan isi di tab 'Mass Screener'.")
                 else:
-                    jalankan_mesin_copet("Watchlist Favorit Pribadi", tickers)
+                    jalankan_mesin_copet("Watchlist Favorit Pribadi", tickers, tf_pilihan_copet, interval_yf, period_yf)
             else:
                 tickers = st.session_state['db_sektor'][pilihan_kategori]
-                jalankan_mesin_copet(pilihan_kategori, tickers)
+                jalankan_mesin_copet(pilihan_kategori, tickers, tf_pilihan_copet, interval_yf, period_yf)
 
 
     # ==============================================================================
