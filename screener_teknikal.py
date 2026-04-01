@@ -1,632 +1,1057 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
+import requests
 import datetime
+import altair as alt
 import time
-import streamlit.components.v1 as components
+import json
+import os
+import streamlit.components.v1 as components 
 
-# --- FUNGSI KALKULASI INDIKATOR TEKNIKAL PANDAS ---
-def calculate_rsi(data, periods=14):
-    close_delta = data['Close'].diff()
-    up = close_delta.clip(lower=0)
-    down = -1 * close_delta.clip(upper=0)
-    ma_up = up.ewm(com=periods - 1, adjust=True, min_periods=periods).mean()
-    ma_down = down.ewm(com=periods - 1, adjust=True, min_periods=periods).mean()
-    rsi = ma_up / ma_down
-    rsi = 100 - (100 / (1 + rsi))
-    return rsi
+# Mengatur konfigurasi halaman website
+st.set_page_config(page_title="Screener Saham Pro", page_icon="📈", layout="wide")
 
-def calculate_macd(data, fast=12, slow=26, signal=9):
-    exp1 = data['Close'].ewm(span=fast, adjust=False).mean()
-    exp2 = data['Close'].ewm(span=slow, adjust=False).mean()
-    macd = exp1 - exp2
-    signal_line = macd.ewm(span=signal, adjust=False).mean()
-    return macd, signal_line
+# ==============================================================================
+# 🎯 SISTEM PENANGKAP URL MULTI-VERSI (ANTI-NYANGKUT 100%)
+# ==============================================================================
+try:
+    # Untuk Streamlit versi baru (>= 1.30)
+    q_params = st.query_params.to_dict()
+except AttributeError:
+    # Untuk Streamlit versi lama (< 1.30)
+    q_params = st.experimental_get_query_params()
 
-def calculate_vwap(df):
-    df['Typical_Price'] = (df['High'] + df['Low'] + df['Close']) / 3
-    df['VWAP'] = (df['Typical_Price'] * df['Volume']).groupby(df.index.date).cumsum() / df['Volume'].groupby(df.index.date).cumsum()
-    return df['VWAP']
+# Ekstrak parameter dengan aman (mengakali jika terbaca sebagai list atau teks biasa)
+q_page = q_params.get("page", [""])[0] if isinstance(q_params.get("page"), list) else q_params.get("page", "")
+q_ticker = q_params.get("ticker", [""])[0] if isinstance(q_params.get("ticker"), list) else q_params.get("ticker", "")
 
-def detect_patterns(curr, prev):
-    body = abs(curr['Close'] - curr['Open'])
-    hl_range = curr['High'] - curr['Low']
-    
-    is_doji = body <= (hl_range * 0.1) if hl_range > 0 else False
-    is_bull_engulf = (prev['Close'] < prev['Open']) and (curr['Close'] > curr['Open']) and (curr['Close'] > prev['Open']) and (curr['Open'] < prev['Close'])
-    
-    lower_wick = curr['Open'] - curr['Low'] if curr['Close'] > curr['Open'] else curr['Close'] - curr['Low']
-    upper_wick = curr['High'] - curr['Close'] if curr['Close'] > curr['Open'] else curr['High'] - curr['Open']
-    is_hammer = (lower_wick > 2 * body) and (upper_wick < body) and (body > 0)
-    
-    if is_bull_engulf: return "🔥 Bull Engulfing"
-    elif is_hammer: return "🔨 Hammer"
-    elif is_doji: return "⚖️ Doji"
-    else: return "-"
+# ==============================================================================
+# 💾 SISTEM MINI DATABASE & CLOUD SECRETS (HYBRID)
+# ==============================================================================
+FILE_DATABASE = "config.json"
 
-# 🟢 FUNGSI 1: MESIN COPET LIVE (INTRADAY + SOUND ALERT + DIRECT CHART LINK)
-def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf, period_yf):
-    st.markdown(f"#### 🔍 Memindai Peluang Live di: **{nama_sektor}** (TF {tf_label})")
-    bar_instan = st.progress(0, text="Mengumpulkan data Market Real-Time...")
-    hasil_instan = []
-    cuan_detected = False 
+def muat_api_key():
+    try:
+        if "INVEZGO_API_KEY" in st.secrets:
+            return st.secrets["INVEZGO_API_KEY"]
+    except:
+        pass 
 
-    for i, ticker in enumerate(daftar_ticker):
-        bar_instan.progress((i) / len(daftar_ticker), text=f"Menganalisa momentum {ticker}...")
+    if os.path.exists(FILE_DATABASE):
         try:
-            df = yf.Ticker(f"{ticker}.JK").history(period=period_yf, interval=interval_yf)
-            if not df.empty and len(df) > 25:
-                df['RSI'] = calculate_rsi(df)
-                df['MACD'], df['Signal'] = calculate_macd(df)
-                df['MA5'] = df['Close'].rolling(window=5).mean()
-                df['MA20'] = df['Close'].rolling(window=20).mean()
-                df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
-                df['VWAP'] = calculate_vwap(df)
+            with open(FILE_DATABASE, "r") as f:
+                data = json.load(f)
+                return data.get("api_key", "")
+        except:
+            return ""
+    return ""
 
-                last_c = df.iloc[-1]; prev_c = df.iloc[-2]
-                cur_price = float(last_c['Close']); vwap_price = float(last_c['VWAP'])
-                
-                rsi_val = float(last_c['RSI'])
-                macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
-                rsi_stat = "🟢" if rsi_val < 30 else "🔴" if rsi_val > 70 else "🟡"
+def simpan_api_key(key):
+    with open(FILE_DATABASE, "w") as f:
+        json.dump({"api_key": key}, f)
 
-                try:
-                    dates = pd.Series(df.index.date).unique()
-                    if len(dates) > 1: prev_close = df[df.index.date == dates[-2]]['Close'].iloc[-1]
-                    else: prev_close = df['Open'].iloc[0]
-                    pct_change = ((cur_price - prev_close) / prev_close) * 100
-                except: pct_change = 0.0
+# ==============================================================================
+# 📦 DATA UTAMA BROKER BEI
+# ==============================================================================
+DARI_BROKER_NAMA_MAP = {
+    "AD": "Sukadana Prima Sekuritas", "AF": "Harita Kencana Sekuritas", "AG": "Kiwoom Sekuritas Indonesia",
+    "AH": "Shinhan Sekuritas Indonesia", "AI": "UOB Kay Hian Sekuritas", "AK": "UBS Sekuritas Indonesia",
+    "AN": "Wanteg Sekuritas", "AO": "Erdikha Elit Sekuritas", "AP": "Pacific Sekuritas Indonesia",
+    "AR": "Binaartha Sekuritas", "AT": "Phintraco Sekuritas", "AZ": "Sucor Sekuritas",
+    "BB": "Verdhana Sekuritas Indonesia", "BF": "Inti Fikasa Sekuritas", "BK": "J.P. Morgan Sekuritas",
+    "BQ": "Korea Investment & Sekuritas (KISI)", "BS": "Equity Sekuritas Indonesia", "BZ": "Batavia Prosperindo",
+    "CC": "Mandiri Sekuritas", "CD": "Mega Capital Sekuritas", "CG": "Citigroup Sekuritas Indonesia",
+    "CP": "KB Valbury Sekuritas", "CS": "Credit Suisse Sekuritas", "DD": "Makindo Sekuritas",
+    "DH": "Sinarmas Sekuritas", "DM": "Masindo Artha Sekuritas", "DP": "DBS Vickers Sekuritas",
+    "DR": "RHB Sekuritas Indonesia", "DX": "Bahana Sekuritas", "EL": "Evergreen Sekuritas",
+    "EP": "MNC Sekuritas", "ES": "Ekokapital Sekuritas", "FO": "Forte Global Sekuritas",
+    "FS": "Yuanta Sekuritas Indonesia", "FZ": "Waterfront Sekuritas", "GA": "BNC Sekuritas Indonesia",
+    "GI": "Mahastra Andalan Sekuritas", "GR": "Panin Sekuritas", "GW": "HSBC Sekuritas Indonesia",
+    "HD": "KGI Sekuritas Indonesia", "HP": "Henan Putihrai Sekuritas", "ID": "Anugerah Sekuritas",
+    "IF": "Samuel Sekuritas Indonesia", "IH": "Pacific 2000 Sekuritas", "II": "Danatama Makmur Sekuritas",
+    "IN": "Investindo Nusantara Sekuritas", "IP": "Indosurya Bersinar Sekuritas", "IT": "Inti Teladan Sekuritas",
+    "IU": "Indo Capital Sekuritas", "KI": "Ciptadana Sekuritas Asia", "KK": "Phillip Sekuritas Indonesia",
+    "KZ": "CLSA Sekuritas Indonesia", "LG": "Trimegah Sekuritas Indonesia", "LS": "Reliance Sekuritas",
+    "MG": "Semesta Indovest Sekuritas", "MI": "Victoria Sekuritas", "MK": "Ekuator Swarna Sekuritas",
+    "MS": "Morgan Stanley Sekuritas", "MU": "Minna Padi Investama", "NI": "BNI Sekuritas",
+    "OD": "BRI Danareksa Sekuritas", "OK": "NET Sekuritas", "PC": "FAC Sekuritas Indonesia",
+    "PD": "Indo Premier Sekuritas (IPOT)", "PF": "Danasakti Sekuritas", "PG": "Panca Global Sekuritas",
+    "PO": "Pilarimas Investindo", "PP": "Aldiracita Sekuritas", "PS": "Paramitra Alfa Sekuritas",
+    "RB": "Nikko Sekuritas Indonesia", "RF": "Buana Capital Sekuritas", "RG": "Profindo Sekuritas",
+    "RO": "Nilai Inti Sekuritas", "RX": "Macquarie Sekuritas Indonesia", "SA": "Elit Sukses Sekuritas",
+    "SC": "IMG Sekuritas", "SH": "Artha Sekuritas Indonesia", "SQ": "BCA Sekuritas",
+    "TF": "Universal Broker Indonesia", "TP": "OCBC Sekuritas Indonesia", "TS": "Dwidana Sakti Sekuritas",
+    "TX": "Dhanawibawa Sekuritas", "XA": "NH Korindo Sekuritas", "XC": "Ajaib Sekuritas Asia",
+    "XL": "Stockbit Sekuritas Digital", "YB": "Jasa Utama Capital Sekuritas", "YJ": "Lotus Andalan Sekuritas",
+    "YO": "Amantara Sekuritas", "YP": "Mirae Asset Sekuritas", "YU": "CGS International Sekuritas",
+    "ZP": "Maybank Sekuritas Indonesia", "ZR": "Bumiputera Sekuritas"
+}
 
-                score = 0; alasan = []
-                if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: score += 2; alasan.append("Uptrend")
-                elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: score += 3; alasan.append("Golden Cross")
-                elif cur_price < last_c['MA5'] and last_c['MA5'] < last_c['MA20']: score -= 2
-                    
-                if cur_price >= vwap_price: score += 1; alasan.append("Aman di atas VWAP")
-                if rsi_val < 30: score += 2; alasan.append("Oversold")
-                if macd_stat == "Bullish": score += 1; alasan.append("MACD Bullish")
-                if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Lonjakan Volume")
-                
-                pola = detect_patterns(last_c, prev_c)
-                if pola != "-": score += 2; alasan.append(pola)
-
-                support = df['Low'].tail(20).min()
-                
-                if score > 0: 
-                    if score >= 6: cuan_detected = True 
-                    hasil_instan.append({"Saham": ticker, "Harga": cur_price, "VWAP": vwap_price, "Support": support, "Score": score, "Alasan": " + ".join(alasan) if alasan else "Momentum Netral", "Pct_Change": pct_change, "RSI_Val": rsi_val, "RSI_Stat": rsi_stat, "MACD_Stat": macd_stat})
-        except: pass
-    
-    bar_instan.empty()
-
-    if cuan_detected:
-        st.markdown("""<audio autoplay style="display:none;"><source src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
-
-    if hasil_instan:
-        hasil_instan.sort(key=lambda x: x['Score'], reverse=True)
-        top_5 = hasil_instan[:5]
-        st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik (Live):**")
-        
-        for rank, item in enumerate(top_5):
-            plan_entry = f"HAKA" if item['Harga'] > item['VWAP'] else "BOW (Pantulan)"
-            cutloss = item['Support'] * 0.98; target = item['Harga'] * 1.03
-            pct_val = item['Pct_Change']
-            pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
-            pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
-            pct_sign = "+" if pct_val > 0 else ""
-            pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
-            
-            tv_link = f"https://id.tradingview.com/chart/?symbol=IDX:{item['Saham']}"
-
-            card_html = f"""<div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px;">
-<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-<div style="min-width: 150px;">
-<div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
-<div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI: <span style="color: #f59e0b; font-size: 14px;">{item['Score']}/10</span></div>
-</div>
-<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Harga</div><div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div></div>
-<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Aksi Entry</div><div style="font-size: 16px; font-weight: 800; color: #22c55e;">{plan_entry}</div></div>
-<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Target Jual</div><div style="font-size: 16px; font-weight: 800; color: #3b82f6;">{target:,.0f}</div></div>
-<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Titik Cutloss</div><div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f}</div></div>
-</div>
-<div style="display: flex; justify-content: space-around; align-items: center; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 VWAP Intraday</div><div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['VWAP']:,.0f}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD Trend</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div></div>
-<div style="text-align: center;">
-<a href="{tv_link}" target="_blank" style="background-color: #0f172a; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 800; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; transition: 0.2s;">🔎 CEK GRAFIK</a>
-</div>
-</div>
-<div style="width: 100%; font-size: 13px; color: #475569;">🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']}</div>
-</div>"""
-            st.markdown(card_html, unsafe_allow_html=True)
+# --- FUNGSI BANTUAN FORMAT ANGKA ---
+def format_rupiah(angka):
+    if pd.isna(angka): return "Rp 0"
+    if abs(angka) >= 1_000_000_000:
+        return f"Rp {angka / 1_000_000_000:.2f} B" 
+    elif abs(angka) >= 1_000_000:
+        return f"Rp {angka / 1_000_000:.2f} M" 
     else:
-        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham momentum pada TF {tf_label} saat ini.")
+        return f"Rp {angka:,.0f}"
 
+def format_lot(angka):
+    if pd.isna(angka): return "0 Lot"
+    angka = abs(angka) 
+    if angka >= 1_000_000:
+        return f"{angka / 1_000_000:.1f}M Lot"
+    elif angka >= 1_000:
+        return f"{angka / 1_000:.1f}K Lot"
+    else:
+        return f"{angka:,.0f} Lot"
 
-# 🟢 FUNGSI 2: MESIN PERSIAPAN BESOK (EOD / BSJP + DIRECT CHART LINK)
-def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_label):
-    st.markdown(f"#### 🌙 Memindai Persiapan BSJP di: **{nama_sektor}** ({start_d.strftime('%d %b %Y')} - {end_d.strftime('%d %b %Y')})")
-    bar_eod = st.progress(0, text="Mengumpulkan data Harian (EOD)...")
-    hasil_eod = []
+# --- FUNGSI KATEGORI WARNA BROKER ---
+def get_kategori_broker(kode):
+    asing = ['AK', 'ZP', 'RX', 'KZ', 'BK', 'CS', 'CG', 'MS', 'YU', 'GW', 'DX', 'DP', 'BQ', 'BB', 'FS', 'HD', 'AG', 'AH', 'AI', 'DR']
+    ritel = ['CC', 'XL', 'DH', 'PD', 'YP', 'NI', 'EP', 'OD', 'XC', 'SQ', 'GR', 'CP', 'MG', 'YB', 'AZ', 'IF', 'HP', 'KK', 'LS', 'SH', 'IN', 'YJ']
+    institusi = ['LG', 'KI', 'RF', 'PP', 'TF', 'TP', 'RO', 'MU', 'XA'] 
+    
+    if kode in asing: return 'Asing', '#9b59b6' 
+    elif kode in ritel: return 'Ritel', '#e74c3c' 
+    elif kode in institusi: return 'Institusi', '#3498db' 
+    else: return 'Zombie', '#2ecc71' 
 
-    fetch_start = min(start_d, end_d - datetime.timedelta(days=90))
-    fetch_end = end_d + datetime.timedelta(days=1)
+def style_warna_broker(val):
+    _, warna = get_kategori_broker(val)
+    return f'color: {warna}; font-weight: bold;'
 
-    for i, ticker in enumerate(daftar_ticker):
-        bar_eod.progress((i) / len(daftar_ticker), text=f"Menganalisa pola harian {ticker}...")
-        try:
-            df = yf.Ticker(f"{ticker}.JK").history(start=fetch_start, end=fetch_end, interval="1d")
+# --- MEMBUAT FITUR "INGATAN" (SESSION STATE) ---
+if 'api_key' not in st.session_state:
+    st.session_state['api_key'] = muat_api_key()
+if 'data_bandarmologi' not in st.session_state:
+    st.session_state['data_bandarmologi'] = None
+if 'multi_screener_data' not in st.session_state:
+    st.session_state['multi_screener_data'] = None
+
+# ==============================================================================
+# 📊 MEMBUAT SIDEBAR MENU (DENGAN KONTROL INDEKS PAKSA)
+# ==============================================================================
+st.sidebar.title("Navigasi Utama")
+daftar_menu = ["🏠 Dashboard", "📊 Screener Teknikal", "🕵️‍♂️ Screener Bandarmologi", "⚙️ Pengaturan API"]
+
+# Logika Penentuan Posisi Menu
+if "Bandarmologi" in str(q_page):
+    def_idx = 2  # Paksa pindah ke Bandarmologi jika ada perintah di URL
+elif "last_menu_idx" in st.session_state:
+    def_idx = st.session_state["last_menu_idx"]  # Ingat posisi sebelumnya
+else:
+    def_idx = 0  # Default ke Dashboard
+
+# KITA HAPUS PARAMETER KEY DI SINI! Kita kontrol murni menggunakan 'index'
+pilihan_menu = st.sidebar.radio("Pilih Menu:", daftar_menu, index=def_idx)
+
+# Simpan pilihan menu terakhir ke memori
+st.session_state["last_menu_idx"] = daftar_menu.index(pilihan_menu)
+
+# Tangkap saham dari URL jika ada
+if q_ticker and pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
+    st.session_state["target_ticker"] = str(q_ticker).replace("'", "").replace("[", "").replace("]", "")
+elif "target_ticker" not in st.session_state:
+    st.session_state["target_ticker"] = "BREN"
+
+# Bersihkan URL SETELAH ditangkap agar aplikasi kembali normal untuk klik selanjutnya
+if q_page or q_ticker:
+    try:
+        st.query_params.clear()
+    except:
+        st.experimental_set_query_params()
+
+st.sidebar.markdown("---")
+st.sidebar.info("Aplikasi Screening Saham Otomatis V1.0\n\n⚡ **Mode Scalper V3 Aktif**")
+
+# --- KONTEN HALAMAN BERDASARKAN MENU ---
+
+if pilihan_menu == "🏠 Dashboard":
+    st.title("Selamat Datang di Screener Saham Pro 📈")
+    st.success("Dashboard aktif! (Fitur IHSG disembunyikan sementara agar kode ringkas)")
+
+elif pilihan_menu == "📊 Screener Teknikal":
+    # Panggil file teknikal Anda
+    import screener_teknikal
+    screener_teknikal.jalankan_teknikal()
+
+elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
+    st.title("Screener Bandarmologi Pro 🕵️‍♂️")
+    st.markdown("Menganalisa jejak **Akumulasi (Net Buy)** & **Distribusi (Net Sell)** Bandar secara mendalam.")
+    
+    if st.session_state['api_key'] == '':
+        st.warning("⚠️ Silakan masukkan API Key Invezgo Anda di menu 'Pengaturan API' terlebih dahulu.")
+    else:
+        # ==============================================================================
+        # 🚀 BAGIAN 1: AUTO-SCREENER MASSAL
+        # ==============================================================================
+        st.markdown("### 🚀 AUTO-SCREENER SAHAM MASSAL")
+        st.markdown("Pindai puluhan saham sekaligus untuk mencari probabilitas kenaikan tertinggi hari ini!")
+        
+        with st.expander("Klik untuk Buka Panel Auto-Screener", expanded=False):
+            col_mode1, col_mode2 = st.columns([1, 1])
+            with col_mode1:
+                mode_scan = st.radio("Pilih Mode Pemindaian:", ["📝 Watchlist Favorit (Manual)", "📊 Indeks IDX Otomatis"])
+            with col_mode2:
+                kemarin_m = datetime.date.today() - datetime.timedelta(days=1)
+                tanggal_multi = st.date_input("Pilih Tanggal Pindai:", value=(kemarin_m, kemarin_m), max_value=datetime.date.today(), key='tgl_multi')
             
-            if not df.empty:
-                df = df.loc[:end_d.strftime('%Y-%m-%d')]
-                
-            if not df.empty and len(df) > 25:
-                df['RSI'] = calculate_rsi(df)
-                df['MACD'], df['Signal'] = calculate_macd(df)
-                df['MA5'] = df['Close'].rolling(window=5).mean()
-                df['MA20'] = df['Close'].rolling(window=20).mean()
-                df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
-
-                last_c = df.iloc[-1]; prev_c = df.iloc[-2]
-                cur_price = float(last_c['Close'])
-                
-                rsi_val = float(last_c['RSI'])
-                macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
-                rsi_stat = "🟢" if rsi_val < 40 else "🔴" if rsi_val > 70 else "🟡"
-                
-                try:
-                    prev_close = float(prev_c['Close'])
-                    pct_change = ((cur_price - prev_close) / prev_close) * 100
-                except: pct_change = 0.0
-
-                score = 0; alasan = []
-                if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: score += 2; alasan.append("Strong Daily Trend")
-                elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: score += 3; alasan.append("Fresh Golden Cross")
-                    
-                if rsi_val < 40: score += 2; alasan.append("Area Bawah (Aman)")
-                if macd_stat == "Bullish": score += 1; alasan.append("MACD Bullish")
-                if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Akumulasi Volume Besar")
-                
-                pola = detect_patterns(last_c, prev_c)
-                if pola != "-": score += 2; alasan.append(pola)
-
-                df_range = df.loc[start_d.strftime('%Y-%m-%d') : end_d.strftime('%Y-%m-%d')]
-                if not df_range.empty and len(df_range) > 1:
-                    high_range = df_range['High'].max()
-                    low_range = df_range['Low'].min()
-                    typical_p = (df_range['High'] + df_range['Low'] + df_range['Close']) / 3
-                    vwap_range = (typical_p * df_range['Volume']).sum() / df_range['Volume'].sum() if df_range['Volume'].sum() > 0 else cur_price
+            tickers_to_scan = []
+            if "Watchlist" in mode_scan:
+                multi_emiten = st.text_area("Ketik Kode Saham (Pisahkan dengan koma):", "BBCA, BMRI, BREN, CUAN, AMMN, TLKM, ASII, GOTO, PGAS")
+                tickers_to_scan = [t.strip().upper() for t in multi_emiten.split(',') if t.strip()]
+            else:
+                pilihan_indeks = st.selectbox("Pilih Indeks Bursa:", ["LQ45 (45 Saham Paling Likuid)", "IDX30 (30 Saham Bluechip)", "Scalper Hotlist (Volatilitas Tinggi)"])
+                if "LQ45" in pilihan_indeks:
+                    tickers_to_scan = [t.strip() for t in "ACES, ADRO, AKRA, AMMN, AMRT, ANTM, ARTO, ASII, BBCA, BBNI, BBRI, BBTN, BFIN, BMRI, BRIS, BRPT, BUKA, CPIN, EMTK, ESSA, EXCL, GOTO, HRUM, ICBP, INCO, INDF, INKP, INTP, ITMG, KLBF, MAPI, MBMA, MDKA, MEDC, MTEL, PGAS, PGEO, PTBA, SIDO, SMGR, SRTG, TLKM, TOWR, UNTR, UNVR".split(",")]
+                elif "IDX30" in pilihan_indeks:
+                    tickers_to_scan = [t.strip() for t in "ADRO, AKRA, AMMN, AMRT, ANTM, ARTO, ASII, BBCA, BBNI, BBRI, BMRI, BRPT, BUKA, CPIN, ESSA, EXCL, GOTO, HRUM, ICBP, INDF, INKP, INTP, ITMG, KLBF, MDKA, MEDC, PGAS, PTBA, TLKM, UNTR".split(",")]
                 else:
-                    high_range = df['High'].tail(10).max()
-                    low_range = df['Low'].tail(10).min()
-                    typical_p = (df['High'].tail(10) + df['Low'].tail(10) + df['Close'].tail(10)) / 3
-                    vwap_range = (typical_p * df['Volume'].tail(10)).sum() / df['Volume'].tail(10).sum()
+                    tickers_to_scan = [t.strip() for t in "BREN, CUAN, PANI, TPIA, BRPT, CGAS, VKTR, NCKL, DATA, STRK, MSJA, BDKR, SMGA, TENN, HUMI".split(",")]
+                
+                st.info(f"Mendeteksi **{len(tickers_to_scan)} saham** di dalam Indeks {pilihan_indeks.split(' (')[0]}.")
+
+            btn_multi = st.button("⚡ Mulai Scanning Massal", use_container_width=True)
+
+        if btn_multi:
+            if len(tanggal_multi) == 2:
+                start_m, end_m = tanggal_multi
+            elif len(tanggal_multi) == 1:
+                start_m = end_m = tanggal_multi[0]
+            else:
+                st.error("Pilih tanggal dengan benar.")
+                st.stop()
+
+            if not tickers_to_scan:
+                st.warning("Silakan pilih atau masukkan minimal 1 kode saham.")
+            else:
+                screener_results = []
+                progress_bar = st.progress(0, text="Memulai pemindaian massal...")
+                
+                headers_m = {"Authorization": f"Bearer {st.session_state['api_key']}", "Accept": "application/json"}
+                params_m = {
+                    "from": start_m.strftime("%Y-%m-%d"),
+                    "to": end_m.strftime("%Y-%m-%d"),
+                    "investor": "all",
+                    "market": "RG"
+                }
+
+                for i, ticker in enumerate(tickers_to_scan):
+                    progress_bar.progress((i) / len(tickers_to_scan), text=f"Sedang memindai {ticker} ({i+1}/{len(tickers_to_scan)})...")
+                    url_m = f"https://api.invezgo.com/analysis/summary/stock/{ticker}"
+                    try:
+                        res_m = requests.get(url_m, headers=headers_m, params=params_m, timeout=10)
+                        if res_m.status_code == 200:
+                            data_m = res_m.json()
+                            if data_m:
+                                df_net_m = pd.DataFrame(data_m)
+                                df_net_m['net_value'] = df_net_m['net_value'].astype(float)
+                                
+                                df_aku_m = df_net_m[df_net_m['net_value'] > 0].sort_values(by='net_value', ascending=False).head(5)
+                                df_dis_m = df_net_m[df_net_m['net_value'] < 0].copy()
+                                df_dis_m['net_value_abs'] = df_dis_m['net_value'].abs()
+                                df_dis_m = df_dis_m.sort_values(by='net_value_abs', ascending=False).head(5)
+                                
+                                tot_aku_m = df_aku_m['net_value'].sum() if not df_aku_m.empty else 0
+                                tot_dis_m = df_dis_m['net_value_abs'].sum() if not df_dis_m.empty else 0
+                                tot_trans_m = tot_aku_m + tot_dis_m
+                                net_vol_m = tot_aku_m - tot_dis_m
+                                
+                                prob_m = 50.0
+                                status_m = "NEUTRAL 🟡"
+                                
+                                if tot_trans_m > 0:
+                                    rasio_m = (tot_aku_m / tot_trans_m) * 100 if tot_aku_m > tot_dis_m else (tot_dis_m / tot_trans_m) * 100
+                                    if tot_aku_m > tot_dis_m:
+                                        if rasio_m > 70:
+                                            prob_m = min(rasio_m + 10, 95.0)
+                                            status_m = "BIG ACCUMULATION 🚀"
+                                        else:
+                                            prob_m = min(rasio_m + 5, 85.0)
+                                            status_m = "NORMAL ACCUMULATION 🟢"
+                                    elif tot_dis_m > tot_aku_m:
+                                        if rasio_m > 70:
+                                            prob_turun_m = min(rasio_m + 10, 95.0)
+                                            prob_m = 100 - prob_turun_m
+                                            status_m = "BIG DISTRIBUTION 🩸"
+                                        else:
+                                            prob_turun_m = min(rasio_m + 5, 85.0)
+                                            prob_m = 100 - prob_turun_m
+                                            status_m = "NORMAL DISTRIBUTION 🔴"
+                                
+                                screener_results.append({
+                                    "Saham": ticker,
+                                    "Probabilitas 🎯": prob_m,
+                                    "Status Bandar": status_m,
+                                    "Net Volume (Rp)": net_vol_m,
+                                    "Top 5 Akumulasi": tot_aku_m,
+                                    "Top 5 Distribusi": tot_dis_m
+                                })
+                    except:
+                        pass 
+                    time.sleep(0.1) 
                     
-                target_potensial = high_range
-                if target_potensial <= cur_price: target_potensial = cur_price * 1.05 
+                progress_bar.progress(100, text="✅ Scanning Selesai!")
+                time.sleep(0.5)
+                progress_bar.empty()
+
+                if screener_results:
+                    df_screener = pd.DataFrame(screener_results)
+                    df_screener = df_screener.sort_values(by="Probabilitas 🎯", ascending=False).reset_index(drop=True)
+                    
+                    df_display = df_screener.copy()
+                    df_display['Probabilitas 🎯'] = df_display['Probabilitas 🎯'].apply(lambda x: f"{x:.1f}%")
+                    df_display['Net Volume (Rp)'] = df_display['Net Volume (Rp)'].apply(format_rupiah)
+                    df_display['Top 5 Akumulasi'] = df_display['Top 5 Akumulasi'].apply(format_rupiah)
+                    df_display['Top 5 Distribusi'] = df_display['Top 5 Distribusi'].apply(format_rupiah)
+                    
+                    st.session_state['multi_screener_data'] = df_display
+                else:
+                    st.session_state['multi_screener_data'] = "KOSONG"
+
+        # Menampilkan Tabel Screener Massal
+        if st.session_state['multi_screener_data'] is not None:
+            if isinstance(st.session_state['multi_screener_data'], pd.DataFrame):
+                st.success("🎯 **LEADERBOARD SAHAM BERPOTENSI TERBANG:** (Pilih saham dari daftar ini, lalu bedah detailnya di kotak bawah)")
+                st.dataframe(st.session_state['multi_screener_data'], use_container_width=True)
+            elif st.session_state['multi_screener_data'] == "KOSONG":
+                st.warning("Tidak ada data ditemukan untuk daftar saham tersebut di tanggal ini.")
+
+        st.write("---")
+
+        # ==============================================================================
+        # 🔍 BAGIAN 2: FITUR ANALISA MENDALAM (SINGLE ANALYZER) 
+        # ==============================================================================
+        st.markdown("### 🔍 Parameter Pencarian (Single Analyzer)")
+        with st.container():
+            col_inp1, col_inp2 = st.columns([1, 2])
+            with col_inp1:
+                # 🟢 KOTAK SAHAM INI OTOMATIS TERISI OLEH MEMORI TANGKAPAN DARI URL
+                emiten_input = st.text_input("Kode Saham Tunggal:", value=st.session_state['target_ticker']).upper()
                 
-                harga_aman = (vwap_range + low_range) / 2
+                # Simpan ke memori jika user ngetik manual saham lain
+                if emiten_input != st.session_state['target_ticker']:
+                    st.session_state['target_ticker'] = emiten_input
+
+            with col_inp2:
+                kemarin = datetime.date.today() - datetime.timedelta(days=1)
+                tanggal_input = st.date_input(
+                    "Pilih Rentang Tanggal (Bisa Mingguan/Bulanan):", 
+                    value=(kemarin, kemarin),
+                    max_value=datetime.date.today()
+                )
+        
+        if st.button("🚀 Analisa Jejak Bandar", use_container_width=True):
+            if len(tanggal_input) == 2:
+                start_date, end_date = tanggal_input
+            elif len(tanggal_input) == 1:
+                start_date = end_date = tanggal_input[0]
+            else:
+                st.error("Silakan pilih tanggal dengan benar.")
+                st.stop()
+
+            b_days = pd.bdate_range(start=start_date, end=end_date)
+            
+            if len(b_days) == 0:
+                st.session_state['data_bandarmologi'] = "KOSONG"
+            else:
+                progress_text = "Menarik data seketika dari Invezgo... Mohon tunggu."
+                my_bar = st.progress(40, text=progress_text)
                 
-                if score > 0: 
-                    hasil_eod.append({
-                        "Saham": ticker, "Harga": cur_price, 
-                        "Support": low_range, "Target": target_potensial, 
-                        "High": high_range, "Low": low_range, 
-                        "Bandar_Avg": vwap_range, "Aman": harga_aman,
-                        "Score": score, "Alasan": " + ".join(alasan) if alasan else "Konsolidasi", 
-                        "Pct_Change": pct_change, "RSI_Val": rsi_val, "RSI_Stat": rsi_stat, "MACD_Stat": macd_stat
-                    })
-        except: pass
-    
-    bar_eod.empty()
-
-    if hasil_eod:
-        hasil_eod.sort(key=lambda x: x['Score'], reverse=True)
-        top_5 = hasil_eod[:5]
-        st.success(f"💼 **Ditemukan {len(top_5)} Saham Terbaik untuk Setup BSJP / Besok Pagi:**")
-        
-        for rank, item in enumerate(top_5):
-            cutloss = item['Support'] * 0.98
-            potensi_cuan = ((item['Target'] - item['Harga']) / item['Harga']) * 100
-            risiko_loss = ((cutloss - item['Harga']) / item['Harga']) * 100
-
-            pct_val = item['Pct_Change']
-            pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
-            pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
-            pct_sign = "+" if pct_val > 0 else ""
-            pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
-            
-            tv_link = f"https://id.tradingview.com/chart/?symbol=IDX:{item['Saham']}"
-
-            card_html_eod = f"""<div style="background: white; border-left: 5px solid #8b5cf6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px;">
-<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-<div style="min-width: 150px;">
-<div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
-<div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI EOD: <span style="color: #8b5cf6; font-size: 14px;">{item['Score']}/10</span></div>
-</div>
-<div style="text-align: center; min-width: 80px;">
-<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Harga Penutupan</div>
-<div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div>
-</div>
-<div style="text-align: center; min-width: 80px;">
-<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Rencana Masuk</div>
-<div style="font-size: 16px; font-weight: 800; color: #8b5cf6;">Sore / Pagi Awal</div>
-</div>
-<div style="text-align: center; min-width: 80px;">
-<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Target Jual ({preset_label})</div>
-<div style="font-size: 16px; font-weight: 800; color: #10b981;">{item['Target']:,.0f} <span style="font-size:12px; color:#10b981;">(+{potensi_cuan:.1f}%)</span></div>
-</div>
-<div style="text-align: center; min-width: 80px;">
-<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Batas Cutloss</div>
-<div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f} <span style="font-size:12px; color:#ef4444;">({risiko_loss:.1f}%)</span></div>
-</div>
-</div>
-<div style="display: flex; justify-content: space-around; align-items: center; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar</div><div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['Bandar_Avg']:,.0f}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 High</div><div style="font-size: 14px; font-weight: 800; color: #10b981;">Rp {item['High']:,.0f}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Low</div><div style="font-size: 14px; font-weight: 800; color: #ef4444;">Rp {item['Low']:,.0f}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Beli Aman</div><div style="font-size: 14px; font-weight: 800; color: #3b82f6;">Rp {item['Aman']:,.0f}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div></div>
-<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div></div>
-<div style="text-align: center;">
-<a href="{tv_link}" target="_blank" style="background-color: #8b5cf6; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 800; display: inline-block; box-shadow: 0 4px 6px rgba(139,92,246,0.3); border: 1px solid #7c3aed; transition: 0.2s;">🔎 CEK GRAFIK</a>
-</div>
-</div>
-<div style="width: 100%; font-size: 13px; color: #475569;">🌙 <b>Kekuatan Harian:</b> {item['Alasan']}</div>
-</div>"""
-            st.markdown(card_html_eod, unsafe_allow_html=True)
-    else:
-        st.warning(f"⚠️ Pada rentang waktu tersebut, tidak ada setup formasi yang bagus untuk saham-saham di kategori ini.")
-
-
-# --- FUNGSI UTAMA HALAMAN TEKNIKAL ---
-def jalankan_teknikal():
-    
-    if 'teknikal_data' not in st.session_state: st.session_state['teknikal_data'] = None
-    if 'teknikal_date' not in st.session_state: st.session_state['teknikal_date'] = None
-    if 'teknikal_tf' not in st.session_state: st.session_state['teknikal_tf'] = None
-    
-    if 'db_sektor' not in st.session_state:
-        st.session_state['db_sektor'] = {
-            "🪙 Logam & Emas": ["MDKA", "PSAB", "BRMS", "ARCI", "ANTM", "INCO", "HRUM", "MBMA", "NCKL", "TINS"],
-            "⛏️ Energi & Batu Bara": ["ADRO", "PTBA", "ITMG", "BUMI", "DOID", "INDY", "BREN", "CUAN", "PGEO", "ENRG"],
-            "🏥 Kesehatan & Farmasi": ["MIKA", "HEAL", "SILO", "KLBF", "SIDO", "PRDA", "CARE", "PEHA"],
-            "🏦 Bank & Finansial": ["BBCA", "BBRI", "BBNI", "BMRI", "BRIS", "ARTO", "BBYB", "BBTN", "NISP", "BNGA"],
-            "🛒 Konsumer & Retail": ["ICBP", "INDF", "AMRT", "MIDI", "MYOR", "UNVR", "MAPI", "ACES", "AMMN"],
-            "📱 Teknologi & Digital": ["GOTO", "BUKA", "EMTK", "WIRG", "BELI", "MLPT", "WIFI"]
-        }
-
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 25px 30px; border-radius: 12px; border-left: 8px solid #f59e0b; margin-bottom: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.2);">
-        <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V5.0 ⚡ (God-Tier Edition)</h2>
-        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Integrasi Auto-Pilot, Sound Alert Cuan, Export CSV, dan Live Chart TradingView Asli.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    tab_live, tab_eod, tab_massal, tab_single = st.tabs([
-        "🚀 Top 5 Copet (Live)", 
-        "📅 Persiapan Besok (EOD)", 
-        "⚙️ Mass Screener", 
-        "🔍 Bedah Chart (TradingView)"
-    ])
-
-    # ==============================================================================
-    # TAB 1: TOP 5 COPET KILAT (LIVE INTRADAY + AUTO PILOT)
-    # ==============================================================================
-    with tab_live:
-        col_title, col_manage = st.columns([3, 2])
-        with col_title:
-            st.markdown("### 🎯 Mesin Copet Live Market")
-        with col_manage:
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-            auto_pilot = st.toggle("🔄 Auto-Pilot (Scan Otomatis Tiap 60 Detik)")
-
-        with st.expander("⚙️ Kelola Kategori Sektoral"):
-            st.markdown("#### ➕ Tambah")
-            new_sec_name = st.text_input("Nama Kategori", placeholder="Cth: 🚀 Saham AI")
-            new_sec_stocks = st.text_input("Kode Saham", placeholder="GOTO, BUKA")
-            if st.button("💾 Simpan", use_container_width=True):
-                if new_sec_name and new_sec_stocks:
-                    st.session_state['db_sektor'][new_sec_name] = [s.strip().upper() for s in new_sec_stocks.split(",")]
-                    st.rerun()
-            st.markdown("---")
-            st.markdown("#### 🗑️ Hapus")
-            sektor_to_delete = st.selectbox("Pilih Kategori:", list(st.session_state['db_sektor'].keys()))
-            if st.button("Hapus Kategori", type="secondary", use_container_width=True):
-                if sektor_to_delete in st.session_state['db_sektor']:
-                    del st.session_state['db_sektor'][sektor_to_delete]
-                    st.rerun()
-
-        opsi_kategori = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
-        opsi_tf = ["1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam"]
-        tf_map_copet = {"1 Menit": ("1m", "5d"), "5 Menit": ("5m", "5d"), "15 Menit": ("15m", "1mo"), "30 Menit": ("30m", "1mo"), "1 Jam": ("60m", "1mo")}
-        
-        st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
-        col_sel, col_tf, col_btn = st.columns([2, 1, 1.5])
-        with col_sel: pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
-        with col_tf: tf_pilihan_copet = st.selectbox("Timeframe:", opsi_tf, index=1, label_visibility="collapsed")
-        with col_btn: eksekusi_copet = st.button("⚡ SCAN LIVE MANUAL", type="primary", use_container_width=True, disabled=auto_pilot)
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        if eksekusi_copet or auto_pilot:
-            interval_yf, period_yf = tf_map_copet[tf_pilihan_copet]
-            st.markdown("---")
-            if pilihan_kategori == "⭐ Watchlist Favorit Saya":
-                default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
-                tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
-                if tickers: jalankan_mesin_copet_live("Watchlist Favorit Pribadi", tickers, tf_pilihan_copet, interval_yf, period_yf)
-            else:
-                tickers = st.session_state['db_sektor'][pilihan_kategori]
-                jalankan_mesin_copet_live(pilihan_kategori, tickers, tf_pilihan_copet, interval_yf, period_yf)
-            
-            if auto_pilot:
-                time.sleep(60)
-                st.rerun()
-
-
-    # ==============================================================================
-    # TAB 2: PERSIAPAN BESOK (EOD SCANNER RENTANG TANGGAL)
-    # ==============================================================================
-    with tab_eod:
-        st.markdown("### 🌙 Radar Persiapan BSJP (End of Day)")
-        st.write("Mencari titik Support terendah dan Target tertinggi berdasarkan rentang waktu. Sangat cocok digunakan saat market tutup.")
-        
-        opsi_kategori_eod = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
-        
-        st.markdown("<div style='font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 5px;'>Pilih Rentang Waktu Cepat (Otomatis mengubah Target Harga):</div>", unsafe_allow_html=True)
-        preset_eod = st.radio(
-            "Pilih Rentang Waktu Cepat:",
-            ["Custom", "1 Hari", "1 Minggu", "1 Bulan", "3 Bulan", "6 Bulan", "1 Tahun"],
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-
-        today = datetime.date.today()
-        if preset_eod == "1 Hari": default_start = today - datetime.timedelta(days=1); default_end = today
-        elif preset_eod == "1 Minggu": default_start = today - datetime.timedelta(weeks=1); default_end = today
-        elif preset_eod == "1 Bulan": default_start = today - datetime.timedelta(days=30); default_end = today
-        elif preset_eod == "3 Bulan": default_start = today - datetime.timedelta(days=90); default_end = today
-        elif preset_eod == "6 Bulan": default_start = today - datetime.timedelta(days=180); default_end = today
-        elif preset_eod == "1 Tahun": default_start = today - datetime.timedelta(days=365); default_end = today
-        else: default_start = today - datetime.timedelta(days=14); default_end = today
-        
-        st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px; border-left: 5px solid #8b5cf6;'>", unsafe_allow_html=True)
-        col_sel_eod, col_date_eod, col_btn_eod = st.columns([2, 2, 1.5])
-        
-        with col_sel_eod: pilihan_kategori_eod = st.selectbox("Pilih Kategori (EOD):", opsi_kategori_eod, label_visibility="collapsed")
-        with col_date_eod: tanggal_eod = st.date_input("Rentang Tanggal:", value=(default_start, default_end), max_value=today, label_visibility="collapsed")
-        with col_btn_eod: eksekusi_eod = st.button("💼 SCAN DATA HARIAN", type="primary", use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        if eksekusi_eod:
-            st.markdown("---")
-            if isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 2: start_d, end_d = tanggal_eod
-            elif isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 1: start_d = end_d = tanggal_eod[0]
-            else: start_d = end_d = tanggal_eod
-
-            if pilihan_kategori_eod == "⭐ Watchlist Favorit Saya":
-                default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
-                tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
-                if tickers: jalankan_mesin_eod_besok("Watchlist Favorit Pribadi", tickers, start_d, end_d, preset_eod)
-            else:
-                tickers = st.session_state['db_sektor'][pilihan_kategori_eod]
-                jalankan_mesin_eod_besok(pilihan_kategori_eod, tickers, start_d, end_d, preset_eod)
-
-
-    # ==============================================================================
-    # TAB 3: MASS SCREENER ADVANCE
-    # ==============================================================================
-    with tab_massal:
-        st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1.5, 1, 1])
-        
-        with col1:
-            pilihan_indeks = st.selectbox("🎯 Target Screener:", ["Watchlist Custom", "LQ45 (Saham Likuid)", "IDX30 (Bluechip)"])
-            if pilihan_indeks == "Watchlist Custom":
-                default_wl2 = st.session_state.get('watchlist', "BBCA, BREN, CUAN, AMMN, GOTO")
-                saham_input2 = st.text_area("📝 Daftar Saham (Ubah Watchlist di sini):", default_wl2, height=68, key="txt_wl2")
-        
-        with col2:
-            timeframe_pilihan = st.selectbox("⏱️ Timeframe (TF):", ["1 Hari (Daily)", "1 Jam (60m)", "30 Menit (30m)", "15 Menit (15m)", "5 Menit (5m)"], index=0)
-
-        with col3:
-            kemarin = datetime.date.today() - datetime.timedelta(days=1)
-            tanggal_input = st.date_input("📅 Tanggal (Khusus Daily):", value=(kemarin, kemarin), max_value=datetime.date.today())
-            
-        st.markdown("</div><br>", unsafe_allow_html=True)
-
-        tf_map = {"1 Hari (Daily)": "1d", "1 Jam (60m)": "60m", "30 Menit (30m)": "30m", "15 Menit (15m)": "15m", "5 Menit (5m)": "5m"}
-        interval_yf = tf_map[timeframe_pilihan]
-
-        if st.button("⚙️ Mulai Mass Screening", use_container_width=True):
-            if pilihan_indeks == "Watchlist Custom": 
-                tickers_to_scan = [t.strip().upper() for t in saham_input2.split(',') if t.strip()]
-                st.session_state['watchlist'] = saham_input2 
-            elif pilihan_indeks == "LQ45 (Saham Likuid)": tickers_to_scan = [t.strip() for t in "ACES, ADRO, AKRA, AMMN, AMRT, ANTM, ARTO, ASII, BBCA, BBNI, BBRI, BBTN, BFIN, BMRI, BRIS, BRPT, BUKA, CPIN, EMTK, ESSA, EXCL, GOTO, HRUM, ICBP, INCO, INDF, INKP, INTP, ITMG, KLBF, MAPI, MBMA, MDKA, MEDC, MTEL, PGAS, PGEO, PTBA, SIDO, SMGR, SRTG, TLKM, TOWR, UNTR, UNVR".split(",")]
-            elif pilihan_indeks == "IDX30 (Bluechip)": tickers_to_scan = [t.strip() for t in "ADRO, AKRA, AMMN, AMRT, ANTM, ARTO, ASII, BBCA, BBNI, BBRI, BMRI, BRPT, BUKA, CPIN, ESSA, EXCL, GOTO, HRUM, ICBP, INDF, INKP, INTP, ITMG, KLBF, MDKA, MEDC, PGAS, PTBA, TLKM, UNTR".split(",")]
-
-            progress_bar = st.progress(0, text=f"Scanning ({timeframe_pilihan})...")
-            hasil_teknikal = []
-
-            for i, ticker in enumerate(tickers_to_scan):
-                progress_bar.progress((i) / len(tickers_to_scan), text=f"Menganalisa {ticker}...")
+                data_ditemukan = False
+                pesan_error_api = "" 
+                data_net = []
+                current_price = 0 
+                
+                url = f"https://api.invezgo.com/analysis/summary/stock/{emiten_input}"
+                headers = {"Authorization": f"Bearer {st.session_state['api_key']}", "Accept": "application/json"}
+                parameter = {
+                    "from": start_date.strftime("%Y-%m-%d"),
+                    "to": end_date.strftime("%Y-%m-%d"),
+                    "investor": "all",
+                    "market": "RG"
+                }
+                
                 try:
-                    if interval_yf == "1d":
-                        if len(tanggal_input) == 2: start_date, end_date = tanggal_input
-                        elif len(tanggal_input) == 1: start_date = end_date = tanggal_input[0]
-                        df = yf.Ticker(f"{ticker}.JK").history(start=start_date - datetime.timedelta(days=90), end=end_date + datetime.timedelta(days=1), interval=interval_yf)
-                        if not df.empty: df = df.loc[:end_date.strftime("%Y-%m-%d")]
+                    response = requests.get(url, headers=headers, params=parameter)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, list) and len(data) > 0:
+                            data_ditemukan = True
+                            for item in data:
+                                broker = item.get("code", "-")
+                                net_val = float(item.get("net_value") or 0)
+                                net_lot = float(item.get("net_volume") or 0) / 100 
+                                buy_avg = float(item.get("buy_avg") or 0)
+                                sell_avg = float(item.get("sell_avg") or 0)
+                                
+                                tipe_brk, warna_brk = get_kategori_broker(broker) 
+                                data_net.append({
+                                    "Broker": broker, "Tipe": tipe_brk, 
+                                    "Net Value": net_val, "Net Lot": net_lot, "Warna": warna_brk,
+                                    "Buy Avg": buy_avg, "Sell Avg": sell_avg
+                                })
+                                
+                    elif response.status_code == 204:
+                        data_ditemukan = False
                     else:
-                        fetch_period = "1mo" if interval_yf in ["60m", "30m"] else "5d"
-                        df = yf.Ticker(f"{ticker}.JK").history(period=fetch_period, interval=interval_yf)
-                    
-                    if not df.empty and len(df) > 25:
-                        df['RSI'] = calculate_rsi(df)
-                        df['MACD'], df['Signal'] = calculate_macd(df)
-                        df['MA5'] = df['Close'].rolling(window=5).mean()
-                        df['MA20'] = df['Close'].rolling(window=20).mean()
-                        df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
-                        df['VWAP'] = calculate_vwap(df)
-
-                        last_c = df.iloc[-1]; prev_c = df.iloc[-2]
-                        cur_price = float(last_c['Close']); rsi_val = float(last_c['RSI']); vwap_val = float(last_c['VWAP'])
-                        waktu_candle = last_c.name.strftime("%d %b %H:%M") if interval_yf != "1d" else last_c.name.strftime("%d %b %Y")
+                        pesan_error_api = f"Error {response.status_code}: {response.text}"
                         
-                        if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: trend_status = "🚀 UPTREND"
-                        elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: trend_status = "🔥 GOLDEN CROSS"
-                        elif cur_price < last_c['MA5'] and last_c['MA5'] < last_c['MA20']: trend_status = "🩸 DOWNTREND"
-                        elif last_c['MA5'] < last_c['MA20'] and prev_c['MA5'] >= prev_c['MA20']: trend_status = "💀 DEAD CROSS"
-                        else: trend_status = "⚖️ SIDEWAYS"
+                except Exception as e:
+                    pesan_error_api = f"Sistem Gagal Terhubung: {e}"
 
-                        rsi_status = "🟢 OVERSOLD" if rsi_val < 30 else "🔴 OVERBOUGHT" if rsi_val > 70 else "🟡 NEUTRAL"
-                        vol_surge = "💥 ADA LONJAKAN" if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5) else "Normal"
-                        macd_status = "📈 Bullish" if last_c['MACD'] > last_c['Signal'] else "📉 Bearish"
-                        vwap_status = "✅ Di Atas VWAP" if cur_price >= vwap_val else "⚠️ Di Bawah VWAP"
-                        pola_candle = detect_patterns(last_c, prev_c)
+                if data_ditemukan:
+                    try:
+                        my_bar.progress(60, text="Mengambil Harga Pasar Real-time...")
+                        yf_ticker = yf.Ticker(f"{emiten_input}.JK")
+                        hist = yf_ticker.history(period="1d")
+                        if not hist.empty:
+                            current_price = float(hist['Close'].iloc[-1])
+                    except:
+                        pass 
 
-                        hasil_teknikal.append({
-                            "Saham": ticker, "Waktu": waktu_candle, "Harga": f"Rp {cur_price:,.0f}", "Pola": pola_candle, 
-                            "VWAP": f"Rp {vwap_val:,.0f} ({vwap_status})", "RSI": f"{rsi_val:.1f} ({rsi_status})", 
-                            "Trend": trend_status, "MACD": macd_status, "Vol Surge": vol_surge
-                        })
-                except: pass
-                time.sleep(0.1)
+                df_trend = pd.DataFrame()
+                if data_ditemukan:
+                    try:
+                        my_bar.progress(80, text="Membongkar Data Historis Harian...")
+                        
+                        df_net_sementara = pd.DataFrame(data_net)
+                        df_akumulasi_sementara = df_net_sementara[df_net_sementara['Net Value'] > 0].sort_values(by='Net Value', ascending=False)
+                        df_distribusi_sementara = df_net_sementara[df_net_sementara['Net Value'] < 0].sort_values(by='Net Value', ascending=True)
+                        
+                        top_acc_list = df_akumulasi_sementara.head(5)['Broker'].tolist()
+                        top_dist_list = df_distribusi_sementara.head(5)['Broker'].tolist()
 
-            progress_bar.empty()
-            if hasil_teknikal:
-                st.session_state['teknikal_data'] = pd.DataFrame(hasil_teknikal)
-                st.session_state['teknikal_date'] = datetime.datetime.now()
-                st.session_state['teknikal_tf'] = timeframe_pilihan
-            else:
-                st.session_state['teknikal_data'] = "KOSONG"
+                        url_trend = f"https://api.invezgo.com/analysis/inventory-chart/stock/{emiten_input}"
+                        params_trend = {
+                            "from": start_date.strftime("%Y-%m-%d"),
+                            "to": end_date.strftime("%Y-%m-%d"),
+                            "scope": "val",
+                            "investor": "all",
+                            "market": "RG"
+                        }
+                        res_trend = requests.get(url_trend, headers=headers, params=params_trend)
+                        if res_trend.status_code == 200:
+                            data_trend = res_trend.json()
+                            broker_hist = data_trend.get('broker', [])
+                            
+                            daily_dict = {}
+                            for b in broker_hist:
+                                b_code = b.get('broker', '')
+                                if b_code in top_acc_list or b_code in top_dist_list:
+                                    for day_data in b.get('data', []):
+                                        dt = day_data.get('date')
+                                        val = float(day_data.get('value', 0))
+                                        
+                                        if dt not in daily_dict:
+                                            daily_dict[dt] = {'Date': dt, 'Akumulasi (Top 5)': 0.0, 'Distribusi (Top 5)': 0.0}
+                                            
+                                        if b_code in top_acc_list:
+                                            daily_dict[dt]['Akumulasi (Top 5)'] += val
+                                        if b_code in top_dist_list:
+                                            daily_dict[dt]['Distribusi (Top 5)'] += val 
+                                            
+                            df_trend = pd.DataFrame(list(daily_dict.values()))
+                            if not df_trend.empty:
+                                df_trend = df_trend.sort_values('Date')
+                    except Exception as e:
+                        pass 
 
-        if isinstance(st.session_state['teknikal_data'], pd.DataFrame):
-            df_hasil = st.session_state['teknikal_data']
-            
-            def hitung_skor_ai(row):
-                skor = 0
-                if "UPTREND" in row['Trend'] or "GOLDEN CROSS" in row['Trend']: skor += 3
-                if "Di Atas" in row['VWAP']: skor += 2
-                if "OVERSOLD" in row['RSI']: skor += 2
-                if "Bullish" in row['MACD']: skor += 1
-                if "LONJAKAN" in row['Vol Surge']: skor += 2
-                if "🔥" in row['Pola'] or "🔨" in row['Pola']: skor += 2
-                return skor
-            
-            df_hasil['Skor AI'] = df_hasil.apply(hitung_skor_ai, axis=1)
-            top_5_df = df_hasil.sort_values(by='Skor AI', ascending=False).head(5)
+                my_bar.progress(100, text="Selesai!")
+                time.sleep(0.5)
+                my_bar.empty() 
 
-            st.markdown("#### ⭐ Top 5 Rekomendasi AI (Dari Hasil Scan Massal)")
-            top_5_list = top_5_df.to_dict('records')
-            
-            if top_5_list:
-                cols = st.columns(len(top_5_list))
-                for i, item in enumerate(top_5_list):
-                    with cols[i]:
-                        ai_card = f"""<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px 10px; border-radius: 8px; text-align: center; border-bottom: 4px solid #22c55e; box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
-<div style="font-size: 20px; font-weight: 900; color: #4ade80; letter-spacing: 1px;">{item['Saham']}</div>
-<div style="font-size: 13px; color: #94a3b8; margin-top: 5px; font-weight: bold;">{item['Harga']}</div>
-<div style="font-size: 12px; font-weight: 800; color: #facc15; margin-top: 8px; background: rgba(255,255,255,0.05); padding: 3px; border-radius: 4px;">Skor AI: {item['Skor AI']}/12</div>
-</div>"""
-                        st.markdown(ai_card, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            opsi_filter = st.radio("Filter Tabel Lengkap:", ["Tampilkan Semua", "Hanya Uptrend/Golden Cross", "Hanya Oversold", "Ada Lonjakan Volume"], horizontal=True)
-            
-            df_tampil = df_hasil.drop(columns=['Skor AI']).copy() 
-            if "Uptrend" in opsi_filter: df_tampil = df_tampil[df_tampil['Trend'].str.contains("UPTREND|GOLDEN CROSS", na=False)]
-            elif "Oversold" in opsi_filter: df_tampil = df_tampil[df_tampil['RSI'].str.contains("OVERSOLD", na=False)]
-            elif "Volume" in opsi_filter: df_tampil = df_tampil[df_tampil['Vol Surge'].str.contains("LONJAKAN", na=False)]
-
-            def color_tek(val):
-                if isinstance(val, str):
-                    if any(x in val for x in ["OVERSOLD", "UPTREND", "GOLDEN CROSS", "Bullish", "LONJAKAN", "Di Atas", "🔥", "🔨"]): return 'color: #2ecc71; font-weight: bold; background-color: rgba(46, 204, 113, 0.1);'
-                    elif any(x in val for x in ["OVERBOUGHT", "DOWNTREND", "DEAD CROSS", "Bearish", "Di Bawah"]): return 'color: #e74c3c; font-weight: bold; background-color: rgba(231, 76, 60, 0.1);'
-                return ''
-
-            st.dataframe(df_tampil.style.applymap(color_tek, subset=['Pola', 'VWAP', 'RSI', 'Trend', 'MACD', 'Vol Surge']), use_container_width=True, hide_index=True)
-            
-            csv = df_tampil.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Download Data Screener (CSV)", data=csv, file_name=f"Mass_Screener_Result_{datetime.date.today()}.csv", mime="text/csv")
-
-
-    # ==============================================================================
-    # TAB 4: BEDAH CHART (WIDGET TRADINGVIEW ASLI)
-    # ==============================================================================
-    with tab_single:
-        st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-        col_inp1, col_inp2, col_inp3 = st.columns([1.5, 2, 1])
-        with col_inp1: single_ticker = st.text_input("🔍 Kode Saham (Tanpa .JK):", "BREN", key="single_tek").upper()
-        
-        tv_tf_opsi = ["1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam", "1 Hari"]
-        tv_tf_map = {"1 Menit": "1", "5 Menit": "5", "15 Menit": "15", "30 Menit": "30", "1 Jam": "60", "1 Hari": "D"}
-        
-        with col_inp2: single_tf = st.selectbox("⏱️ Timeframe Analisa:", tv_tf_opsi, index=1, key="tf_single_tv")
-        with col_inp3:
-            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            btn_single_tek = st.button("🚀 Load TradingView", use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        if btn_single_tek:
-            if not single_ticker: st.error("Masukkan kode saham."); st.stop()
-            
-            symbol_tv = f"IDX:{single_ticker}"
-            interval_tv = tv_tf_map[single_tf]
-            
-            st.markdown(f"### 📈 Live Chart: {single_ticker} (TF: {single_tf})")
-            
-            tv_html = f"""
-            <div class="tradingview-widget-container">
-              <div id="tradingview_12345"></div>
-              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-              <script type="text/javascript">
-              new TradingView.widget(
-              {{
-              "width": "100%",
-              "height": 550,
-              "symbol": "{symbol_tv}",
-              "interval": "{interval_tv}",
-              "timezone": "Asia/Jakarta",
-              "theme": "light",
-              "style": "1",
-              "locale": "id",
-              "enable_publishing": false,
-              "hide_top_toolbar": false,
-              "save_image": false,
-              "container_id": "tradingview_12345"
-            }}
-              );
-              </script>
-            </div>
-            """
-            components.html(tv_html, height=560)
-            
-            try:
-                df_daily = yf.Ticker(f"{single_ticker}.JK").history(period="1mo", interval="1d")
-                if not df_daily.empty:
-                    prev_day = df_daily.iloc[-2]
-                    pivot = (prev_day['High'] + prev_day['Low'] + prev_day['Close']) / 3
-                    r1 = (pivot * 2) - prev_day['Low']; s1 = (pivot * 2) - prev_day['High']
-                    r2 = pivot + (prev_day['High'] - prev_day['Low']); s2 = pivot - (prev_day['High'] - prev_day['Low'])
+                if pesan_error_api != "":
+                    st.error(f"🚨 **GAGAL MENARIK DATA DARI INVEZGO!**\n\nPesan dari server: `{pesan_error_api}`")
+                    st.session_state['data_bandarmologi'] = None
+                elif data_ditemukan:
+                    df_net = pd.DataFrame(data_net)
                     
-                    pivot_box = f"""<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
-<div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #f59e0b; color: #1e293b;">
-<div style="font-size: 11px; font-weight: bold;">📈 RESISTANCE 2</div><div style="font-size: 18px; font-weight: 800;">Rp {r2:,.0f}</div>
+                    df_akumulasi = df_net[df_net['Net Value'] > 0].sort_values(by='Net Value', ascending=False)
+                    df_distribusi = df_net[df_net['Net Value'] < 0].copy()
+                    df_distribusi['Net Value Abs'] = df_distribusi['Net Value'].abs()
+                    df_distribusi = df_distribusi.sort_values(by='Net Value Abs', ascending=False)
+
+                    st.session_state['data_bandarmologi'] = {
+                        'emiten': emiten_input, 'start_date': start_date, 'end_date': end_date,
+                        'df_akumulasi': df_akumulasi, 'df_distribusi': df_distribusi,
+                        'df_akumulasi_top5': df_akumulasi.head(5), 'df_distribusi_top5': df_distribusi.head(5),
+                        'current_price': current_price,
+                        'df_trend': df_trend 
+                    }
+                else:
+                    st.session_state['data_bandarmologi'] = "KOSONG"
+
+        # 🟢 MENAMPILKAN HASIL SINGLE ANALYZER DARI INGATAN
+        if st.session_state['data_bandarmologi'] == "KOSONG":
+            st.warning("Data kosong. Bursa mungkin libur atau saham tersebut sedang suspend/tidak ada transaksi pada rentang tanggal yang dipilih.")
+        
+        elif st.session_state['data_bandarmologi'] is not None:
+            db = st.session_state['data_bandarmologi']
+            emiten_res, start_date_res, end_date_res = db['emiten'], db['start_date'], db['end_date']
+            df_akumulasi, df_distribusi = db['df_akumulasi'], db['df_distribusi']
+            df_akumulasi_top5, df_distribusi_top5 = db['df_akumulasi_top5'], db['df_distribusi_top5']
+            current_price = db.get('current_price', 0)
+            df_trend = db.get('df_trend', pd.DataFrame())
+
+            col_alert, col_print = st.columns([4, 1])
+            with col_alert:
+                st.success(f"✅ Data ditarik! Rentang: **{start_date_res.strftime('%d %b %Y')}** s/d **{end_date_res.strftime('%d %b %Y')}**")
+            with col_print:
+                components.html(
+                    """
+                    <script>
+                    function printLaporan() {
+                        window.parent.print();
+                    }
+                    </script>
+                    <div style="text-align: right; padding-top: 2px;">
+                        <button onclick="printLaporan()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.15); width: 100%;">
+                            🖨️ Cetak PDF / JPG
+                        </button>
+                    </div>
+                    """,
+                    height=55
+                )
+            
+            total_akumulasi = df_akumulasi_top5['Net Value'].sum()
+            total_distribusi = df_distribusi_top5['Net Value Abs'].sum()
+            net_total = total_akumulasi - total_distribusi
+            
+            total_top5_gabungan = total_akumulasi + total_distribusi
+            pct_buy_top5 = (total_akumulasi / total_top5_gabungan * 100) if total_top5_gabungan > 0 else 0
+            pct_sell_top5 = (total_distribusi / total_top5_gabungan * 100) if total_top5_gabungan > 0 else 0
+
+            bandar_vwap = 0
+            if total_akumulasi > 0 and df_akumulasi_top5['Net Lot'].sum() > 0:
+                bandar_vwap = total_akumulasi / (df_akumulasi_top5['Net Lot'].sum() * 100)
+
+            total_transaksi = total_akumulasi + total_distribusi
+            prob_naik = 50.0
+            status = "NEUTRAL 🟡"
+            warna = "warning"
+            analisa_teks = "Kekuatan Buyer dan Seller berimbang sempurna. Bandar sedang *wait and see* atau tukar barang (Crossing)."
+            aksi_teks = "Pantau pergerakan harga besok. Jangan masuk sebelum ada arah (*breakout* resisten atau jebol *support*) yang jelas."
+
+            if total_transaksi > 0:
+                rasio = (total_akumulasi / total_transaksi) * 100 if total_akumulasi > total_distribusi else (total_distribusi / total_transaksi) * 100
+                
+                if total_akumulasi > total_distribusi:
+                    if rasio > 70:
+                        status, warna, prob_naik = "BIG ACCUMULATION 🚀", "success", min(rasio + 10, 95.0)
+                        analisa_teks = f"Bandar (Top 5) memborong sangat agresif dengan penguasaan **{rasio:.1f}%**. Barang beredar di ritel mulai terserap habis."
+                        aksi_teks = "Sangat layak untuk **Hajar Kanan (HAKA)** jika besok pagi *Bid* ditebalkan dan ada lonjakan volume di 5 menit pertama."
+                    else:
+                        status, warna, prob_naik = "NORMAL ACCUMULATION 🟢", "info", min(rasio + 5, 85.0)
+                        analisa_teks = f"Bandar melakukan akumulasi bertahap dengan dominasi **{rasio:.1f}%**. Masih ada perlawanan dari kubu seller."
+                        aksi_teks = "Pantau pergerakan besok. Cicil beli jika harga koreksi ke area *Support* atau saat *Offer* mulai dimakan habis perlahan."
+                elif total_distribusi > total_akumulasi:
+                    if rasio > 70:
+                        status, warna = "BIG DISTRIBUTION 🩸", "error"
+                        prob_turun = min(rasio + 10, 95.0); prob_naik = 100 - prob_turun
+                        analisa_teks = f"Bandar (Top 5) buang barang masif dengan dominasi **{rasio:.1f}%**. Distribusi keras sedang terjadi."
+                        aksi_teks = "**HINDARI** saham ini sementara waktu. Manfaatkan pantulan teknikal kecil untuk *Cutloss* atau *Taking Profit*. Waspada antrean *Bid* palsu (Fake Bid)."
+                    else:
+                        status, warna = "NORMAL DISTRIBUTION 🔴", "warning"
+                        prob_turun = min(rasio + 5, 85.0); prob_naik = 100 - prob_turun
+                        analisa_teks = f"Terdapat indikasi buang barang dengan kekuatan **{rasio:.1f}%**, namun belum terlalu agresif."
+                        aksi_teks = "Waspada tekanan jual. Scalper hanya boleh masuk jika ada *spike* volume mendadak dan *Offer* tebal dijebol dalam hitungan detik."
+
+            st.markdown("### 📊 Ringkasan Transaksi Top 5 Broker")
+            col_met1, col_met2, col_met3, col_met4, col_met5 = st.columns([1, 1, 1, 1.2, 1.2])
+            
+            col_met1.metric("🟢 Top 5 Akumulasi", format_rupiah(total_akumulasi))
+            col_met2.metric("🔴 Top 5 Distribusi", format_rupiah(total_distribusi))
+            col_met3.metric(
+                "⚡ NET VOLUME", format_rupiah(abs(net_total)), 
+                delta="Akumulasi" if net_total > 0 else "-Distribusi",
+                delta_color="normal" if net_total > 0 else "inverse"
+            )
+
+            with col_met4:
+                if current_price > 0 and bandar_vwap > 0:
+                    selisih_harga = current_price - bandar_vwap
+                    selisih_persen = (selisih_harga / bandar_vwap) * 100
+                    
+                    if selisih_persen < 0:
+                        vwap_color = "linear-gradient(135deg, #2563eb, #3b82f6)" 
+                        vwap_shadow = "rgba(59, 130, 246, 0.4)"
+                        status_vwap = "📉 DISKON (Bandar Nyangkut)"
+                        sign = ""
+                    elif selisih_persen > 5:
+                        vwap_color = "linear-gradient(135deg, #dc2626, #ef4444)" 
+                        vwap_shadow = "rgba(239, 68, 68, 0.4)"
+                        status_vwap = "⚠️ PREMIUM (Rawan Guyur)"
+                        sign = "+"
+                    else:
+                        vwap_color = "linear-gradient(135deg, #059669, #10b981)" 
+                        vwap_shadow = "rgba(16, 185, 129, 0.4)"
+                        status_vwap = "✅ IDEAL (Dekat Rata-rata)"
+                        sign = "+"
+                        
+                    html_vwap = f"""
+                    <div style="background: {vwap_color}; padding: 12px 10px; border-radius: 12px; text-align: center; color: white; box-shadow: 0 8px 15px {vwap_shadow}; border: 1px solid rgba(255,255,255,0.2); margin-top: -10px;">
+                        <div style="font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ Pasar vs Bandar</div>
+                        <div style="font-size: 20px; font-weight: 900; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); line-height: 1.2;">Rp {current_price:,.0f} <span style="font-size: 13px; font-weight: normal;">({sign}{selisih_persen:.1f}%)</span></div>
+                        <div style="font-size: 12px; margin-top: 4px; font-weight: 600; color: #f1f5f9;">Modal Bandar: <span style="color: #fde047; font-weight: 800;">Rp {bandar_vwap:,.0f}</span></div>
+                        <div style="font-size: 10px; margin-top: 6px; font-weight: 700; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 3px 8px; display: inline-block;">{status_vwap}</div>
+                    </div>
+                    """
+                    st.markdown(html_vwap, unsafe_allow_html=True)
+                else:
+                    st.metric("🏷️ Modal Rata-rata Bandar", format_rupiah(bandar_vwap))
+
+            with col_met5:
+                if prob_naik >= 60:
+                    bg_color = "linear-gradient(135deg, #16a34a, #22c55e)" 
+                    shadow = "rgba(34, 197, 94, 0.4)"
+                    label_risiko = "🔥 LAYAK PANTAU"
+                elif prob_naik <= 40:
+                    bg_color = "linear-gradient(135deg, #dc2626, #ef4444)" 
+                    shadow = "rgba(239, 68, 68, 0.4)"
+                    label_risiko = "⚠️ RISIKO TINGGI"
+                else:
+                    bg_color = "linear-gradient(135deg, #d97706, #eab308)" 
+                    shadow = "rgba(234, 179, 8, 0.4)"
+                    label_risiko = "⚖️ NETRAL"
+
+                html_probabilitas = f"""
+                <div style="background: {bg_color}; padding: 12px 10px; border-radius: 12px; text-align: center; color: white; box-shadow: 0 8px 15px {shadow}; border: 1px solid rgba(255,255,255,0.2); margin-top: -10px;">
+                    <div style="font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Probabilitas Besok</div>
+                    <div style="font-size: 26px; font-weight: 900; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); line-height: 1.2;">{prob_naik:.1f}%</div>
+                    <div style="font-size: 10px; margin-top: 4px; font-weight: 700; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 3px 8px; display: inline-block;">{label_risiko}</div>
+                </div>
+                """
+                st.markdown(html_probabilitas, unsafe_allow_html=True)
+
+            st.write("---")
+
+            col_chart1, col_chart2 = st.columns(2)
+            
+            df_aku_chart = df_akumulasi_top5.copy()
+            if not df_aku_chart.empty:
+                df_aku_chart['Broker_Label'] = df_aku_chart['Broker'] + " (" + df_aku_chart['Tipe'] + ")"
+                df_aku_chart['Label_Val'] = df_aku_chart['Net Value'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
+                df_aku_chart['Label_Lot'] = df_aku_chart['Net Lot'].apply(format_lot)
+
+            df_dis_chart = df_distribusi_top5.copy()
+            if not df_dis_chart.empty:
+                df_dis_chart['Broker_Label'] = df_dis_chart['Broker'] + " (" + df_dis_chart['Tipe'] + ")"
+                df_dis_chart['Label_Val'] = df_dis_chart['Net Value Abs'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
+                df_dis_chart['Label_Lot'] = df_dis_chart['Net Lot'].apply(format_lot)
+
+            with col_chart1:
+                st.markdown("<h4 style='text-align: center;'>🟢 Top 5 Net Buy</h4>", unsafe_allow_html=True)
+                if not df_aku_chart.empty:
+                    base_buy = alt.Chart(df_aku_chart).encode(
+                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
+                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value:Q', format=',.0f'), alt.Tooltip('Net Lot:Q', format=',.0f')]
+                    )
+                    bar_buy = base_buy.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                        y=alt.Y('Net Value:Q', axis=alt.Axis(title='Value', format='~s')),
+                        color=alt.Color('Warna:N', scale=None)
+                    )
+                    text_val_buy = base_buy.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
+                        y=alt.Y('Net Value:Q'),
+                        text='Label_Val:N'
+                    )
+                    text_lot_buy = base_buy.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
+                        y=alt.Y('Net Value:Q'),
+                        text='Label_Lot:N'
+                    )
+                    chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=350)
+                    st.altair_chart(chart_buy, use_container_width=True)
+
+                    st.markdown(f"""
+                    <div style="background: rgba(46, 204, 113, 0.08); border-top: 3px solid #2ecc71; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Masuk (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #2ecc71;">{format_rupiah(total_akumulasi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #2ecc71; padding: 2px 8px; border-radius: 12px;">{pct_buy_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("Tidak ada data Net Buy.")
+
+            with col_chart2:
+                st.markdown("<h4 style='text-align: center;'>🔴 Top 5 Net Sell</h4>", unsafe_allow_html=True)
+                if not df_dis_chart.empty:
+                    base_sell = alt.Chart(df_dis_chart).encode(
+                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
+                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value Abs:Q', format=',.0f'), alt.Tooltip('Net Lot:Q', format=',.0f')]
+                    )
+                    bar_sell = base_sell.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                        y=alt.Y('Net Value Abs:Q', axis=alt.Axis(title='Value', format='~s')),
+                        color=alt.Color('Warna:N', scale=None)
+                    )
+                    text_val_sell = base_sell.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
+                        y=alt.Y('Net Value Abs:Q'),
+                        text='Label_Val:N'
+                    )
+                    text_lot_sell = base_sell.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
+                        y=alt.Y('Net Value Abs:Q'),
+                        text='Label_Lot:N'
+                    )
+                    chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=350)
+                    st.altair_chart(chart_sell, use_container_width=True)
+
+                    st.markdown(f"""
+                    <div style="background: rgba(231, 76, 60, 0.08); border-top: 3px solid #e74c3c; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Keluar (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #e74c3c;">{format_rupiah(total_distribusi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #e74c3c; padding: 2px 8px; border-radius: 12px;">{pct_sell_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("Tidak ada data Net Sell.")
+
+            st.write("---")
+            st.markdown("### 📋 Detail Transaksi (Klasik View)")
+            style_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
+
+            df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
+            df_buy.columns = ['Buy', 'B.Val', 'B.Lot', 'B.Avg']
+            
+            df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
+            df_sell['Net Lot'] = df_sell['Net Lot'].abs()
+            df_sell.columns = ['Sell', 'S.Val', 'S.Lot', 'S.Avg']
+
+            col_tabel1, col_tabel2 = st.columns(2)
+            
+            with col_tabel1:
+                st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 AKUMULASI (BUY)</h5>", unsafe_allow_html=True)
+                styler_buy = getattr(df_buy.style, style_method)(style_warna_broker, subset=['Buy'])
+                styler_buy = getattr(styler_buy, style_method)(lambda x: 'color: #2ecc71; font-weight: bold;', subset=['B.Val', 'B.Lot', 'B.Avg'])
+                styler_buy = styler_buy.format({'B.Val': 'Rp {:,.0f}', 'B.Lot': '{:,.0f}', 'B.Avg': 'Rp {:,.0f}'})
+                st.dataframe(styler_buy, use_container_width=True, hide_index=True)
+
+            with col_tabel2:
+                st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DISTRIBUSI (SELL)</h5>", unsafe_allow_html=True)
+                styler_sell = getattr(df_sell.style, style_method)(style_warna_broker, subset=['Sell'])
+                styler_sell = getattr(styler_sell, style_method)(lambda x: 'color: #e74c3c; font-weight: bold;', subset=['S.Val', 'S.Lot', 'S.Avg'])
+                styler_sell = styler_sell.format({'S.Val': 'Rp {:,.0f}', 'S.Lot': '{:,.0f}', 'S.Avg': 'Rp {:,.0f}'})
+                st.dataframe(styler_sell, use_container_width=True, hide_index=True)
+
+            st.markdown("""
+            <div style='text-align: center; font-size: 16px; margin-top: 10px; margin-bottom: 20px;'>
+                <span style='color:#2ecc71; font-weight:bold;'>● Zombie</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                <span style='color:#9b59b6; font-weight:bold;'>● Asing</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                <span style='color:#e74c3c; font-weight:bold;'>● Ritel</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                <span style='color:#3498db; font-weight:bold;'>● Institusi</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("#### 🔍 Cari Info Kode Broker")
+            col_search1, col_search2 = st.columns([1, 2])
+            
+            with col_search1:
+                search_query = st.text_input("Ketik Kode / Nama Broker:", "", placeholder="Contoh: AK atau Mandiri").strip()
+            
+            if search_query:
+                df_semua_broker = pd.DataFrame(list(DARI_BROKER_NAMA_MAP.items()), columns=['Kode', 'Nama'])
+                df_filtered = df_semua_broker[
+                    df_semua_broker['Kode'].str.contains(search_query, case=False, na=False) | 
+                    df_semua_broker['Nama'].str.contains(search_query, case=False, na=False)
+                ]
+                
+                if not df_filtered.empty:
+                    style_list_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
+                    df_filtered_styled = getattr(df_filtered.style, style_list_method)(style_warna_broker, subset=['Kode', 'Nama'])
+                    st.dataframe(df_filtered_styled, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Tidak ditemukan broker yang cocok dengan pencarian.")
+
+            if total_transaksi > 0:
+                posisi_marker = (total_akumulasi / total_transaksi) * 100
+
+                meter_html = f"""
+                <style>
+                .broker-action-container {{
+                    width: 100%; margin-top: 10px; margin-bottom: 30px; padding: 25px 20px;
+                    background-color: rgba(15, 23, 42, 0.6); border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                }}
+                .broker-action-title {{
+                    font-weight: 800; font-size: 18px; margin-bottom: 25px; color: #f8fafc; text-align: center; letter-spacing: 1px;
+                }}
+                .bar-wrapper {{
+                    position: relative; height: 20px; border-radius: 10px; display: flex; overflow: hidden;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.8) inset;
+                }}
+                .bar-segment {{
+                    flex: 1; border-right: 2px solid rgba(0,0,0,0.6);
+                }}
+                .bar-segment:last-child {{ border-right: none; }}
+                .bg-big-dist {{ background-color: #dc2626; }}
+                .bg-dist {{ background-color: #ef4444; }}
+                .bg-neutral {{ background-color: #94a3b8; }}
+                .bg-acc {{ background-color: #22c55e; }}
+                .bg-big-acc {{ background-color: #16a34a; }}
+
+                .marker-container {{
+                    position: absolute; top: -12px; bottom: -12px; left: {posisi_marker:.1f}%;
+                    transform: translateX(-50%); z-index: 10;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }}
+                .marker-line {{
+                    width: 8px; height: 44px; background-color: #fde047; border-radius: 4px;
+                    box-shadow: 0 0 15px 4px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
+                }}
+                .labels {{
+                    display: flex; justify-content: space-between; font-size: 15px; color: #ffffff; margin-top: 15px; font-weight: 700;
+                    text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+                }}
+                </style>
+
+                <div class="broker-action-container">
+                    <div class="broker-action-title">📊 BROKER ACTION METER 📊</div>
+                    <div class="bar-wrapper">
+                        <div class="bar-segment bg-big-dist"></div>
+                        <div class="bar-segment bg-dist"></div>
+                        <div class="bar-segment bg-neutral"></div>
+                        <div class="bar-segment bg-acc"></div>
+                        <div class="bar-segment bg-big-acc"></div>
+                        <div class="marker-container">
+                            <div class="marker-line"></div>
+                        </div>
+                    </div>
+                    <div class="labels">
+                        <span style="color: #ffcccc;">🩸 Big Dist</span>
+                        <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Neutral</span>
+                        <span style="color: #ccffcc;">🚀 Big Acc</span>
+                    </div>
+                </div>
+                """
+                st.markdown(meter_html, unsafe_allow_html=True)
+
+            st.write("---")
+            st.markdown("### 🥧 Peta Kekuatan Broker (Asing vs Ritel vs Institusi)")
+            
+            df_aku_kategori = df_akumulasi.groupby('Tipe')['Net Value'].sum().reset_index()
+            if not df_aku_kategori.empty:
+                tot_aku_kategori = df_aku_kategori['Net Value'].sum()
+                df_aku_kategori['Persen'] = (df_aku_kategori['Net Value'] / tot_aku_kategori) * 100
+                df_aku_kategori['Label'] = df_aku_kategori['Persen'].apply(lambda x: f"{x:.1f}%" if x > 4 else "")
+
+            df_dis_kategori = df_distribusi.groupby('Tipe')['Net Value Abs'].sum().reset_index()
+            if not df_dis_kategori.empty:
+                tot_dis_kategori = df_dis_kategori['Net Value Abs'].sum()
+                df_dis_kategori['Persen'] = (df_dis_kategori['Net Value Abs'] / tot_dis_kategori) * 100
+                df_dis_kategori['Label'] = df_dis_kategori['Persen'].apply(lambda x: f"{x:.1f}%" if x > 4 else "")
+            
+            color_scale_pie = alt.Scale(
+                domain=['Asing', 'Ritel', 'Institusi', 'Zombie'],
+                range=['#9b59b6', '#e74c3c', '#3498db', '#2ecc71']
+            )
+
+            col_pie1, col_pie2 = st.columns(2)
+            with col_pie1:
+                st.markdown("<h5 style='text-align: center; color: #2ecc71;'>🟢 Dominasi Beli (Akumulasi)</h5>", unsafe_allow_html=True)
+                if not df_aku_kategori.empty:
+                    base_buy = alt.Chart(df_aku_kategori).encode(
+                        theta=alt.Theta(field="Net Value", type="quantitative", stack=True),
+                        color=alt.Color(field="Tipe", type="nominal", scale=color_scale_pie, legend=alt.Legend(title=None, orient='bottom', labelFontSize=12))
+                    )
+                    pie_buy = base_buy.mark_arc(innerRadius=50, outerRadius=120, cornerRadius=3).encode(
+                        tooltip=['Tipe', alt.Tooltip('Net Value:Q', format=',.0f', title='Nilai (Rp)'), alt.Tooltip('Persen:Q', format='.1f', title='Porsi (%)')]
+                    )
+                    text_buy = base_buy.mark_text(radius=85, size=13, fontWeight=800).encode(
+                        text='Label:N',
+                        color=alt.value('white') 
+                    )
+                    st.altair_chart(alt.layer(pie_buy, text_buy).properties(height=320), use_container_width=True)
+                else:
+                    st.info("Tidak ada data akumulasi")
+
+            with col_pie2:
+                st.markdown("<h5 style='text-align: center; color: #e74c3c;'>🔴 Dominasi Jual (Distribusi)</h5>", unsafe_allow_html=True)
+                if not df_dis_kategori.empty:
+                    base_sell = alt.Chart(df_dis_kategori).encode(
+                        theta=alt.Theta(field="Net Value Abs", type="quantitative", stack=True),
+                        color=alt.Color(field="Tipe", type="nominal", scale=color_scale_pie, legend=alt.Legend(title=None, orient='bottom', labelFontSize=12))
+                    )
+                    pie_sell = base_sell.mark_arc(innerRadius=50, outerRadius=120, cornerRadius=3).encode(
+                        tooltip=['Tipe', alt.Tooltip('Net Value Abs:Q', format=',.0f', title='Nilai (Rp)'), alt.Tooltip('Persen:Q', format='.1f', title='Porsi (%)')]
+                    )
+                    text_sell = base_sell.mark_text(radius=85, size=13, fontWeight=800).encode(
+                        text='Label:N',
+                        color=alt.value('white')
+                    )
+                    st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
+                else:
+                    st.info("Tidak ada data distribusi")
+
+            total_aku_all = df_aku_kategori['Net Value'].sum() if not df_aku_kategori.empty else 0
+            total_dis_all = df_dis_kategori['Net Value Abs'].sum() if not df_dis_kategori.empty else 0
+            
+            pct_asing_buy = 0
+            pct_ritel_sell = 0
+            
+            if total_aku_all > 0 and 'Asing' in df_aku_kategori['Tipe'].values:
+                asing_buy = df_aku_kategori[df_aku_kategori['Tipe'] == 'Asing']['Net Value'].iloc[0]
+                pct_asing_buy = (asing_buy / total_aku_all) * 100
+                
+            if total_dis_all > 0 and 'Ritel' in df_dis_kategori['Tipe'].values:
+                ritel_sell = df_dis_kategori[df_dis_kategori['Tipe'] == 'Ritel']['Net Value Abs'].iloc[0]
+                pct_ritel_sell = (ritel_sell / total_dis_all) * 100
+
+            if pct_asing_buy > 40 and pct_ritel_sell > 40:
+                insight_bg = "linear-gradient(90deg, rgba(20, 83, 45, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)"
+                insight_border = "#4ade80" 
+                insight_title = "🔥 BIG MONEY INFLOW (STRONG SIGNAL)"
+                insight_teks = "Terjadi akumulasi masif! <b>Asing (Smart Money)</b> sedang memborong barang saat <b>Ritel ketakutan (Cutloss)</b>. Ini adalah pola klasik perpindahan barang sebelum harga dikerek naik (Fase Markup). Sangat layak dipantau!"
+            elif pct_asing_buy > 40:
+                insight_bg = "linear-gradient(90deg, rgba(88, 28, 135, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)"
+                insight_border = "#c084fc" 
+                insight_title = "🟣 FOREIGN ACCUMULATION"
+                insight_teks = "Pembelian saham didominasi kuat oleh <b>Asing / Institusi Global</b>. Ada aliran dana masuk (Inflow) yang stabil. Posisi cukup aman untuk di-*hold* mengikuti tren bandar."
+            elif pct_ritel_sell > 40:
+                insight_bg = "linear-gradient(90deg, rgba(30, 58, 138, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)"
+                insight_border = "#60a5fa" 
+                insight_title = "📉 RETAIL PANIC SELLING"
+                insight_teks = "<b>Ritel</b> terpantau mendominasi antrean jual dan membuang barang. Tanda positif (Pembersihan Penumpang) bahwa saham sedang diserap pelan-pelan oleh Institusi/Asing sebelum diangkat naik."
+            else:
+                insight_bg = "linear-gradient(90deg, rgba(51, 65, 85, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)"
+                insight_border = "#cbd5e1" 
+                insight_title = "💤 NO CLEAR SPONSOR (SIDEWAYS/CROSSING)"
+                insight_teks = "Tidak ada aliran dana (Inflow) Asing yang menonjol dan tidak ada aksi buang barang Ritel yang masif. Transaksi hari ini murni didominasi oleh <b>perputaran cepat antar Scalper</b>, lempar-lemparan barang (Crossing), atau pasar sedang sepi. Disarankan <b>Wait & See</b>."
+
+            st.markdown(f"""
+            <div style="background: {insight_bg}; border-left: 8px solid {insight_border}; padding: 15px 20px; border-radius: 6px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                <div style="color: {insight_border}; margin-top: 0; margin-bottom: 8px; font-weight: 900; font-size: 16px; letter-spacing: 0.5px;">{insight_title}</div>
+                <div style="font-size: 14px; font-weight: 500; color: #f8fafc; line-height: 1.5;">{insight_teks}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if not df_trend.empty:
+                st.write("---")
+                st.markdown("### 📈 Tren Akumulasi Harian (Time-Series)")
+                st.markdown("Memantau pergerakan **Top 5 Akumulator** vs **Top 5 Distributor** dari hari ke hari. Angka persen (%) menunjukkan seberapa dominan kekuatan beli/jual di hari tersebut.")
+                
+                df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
+                df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
+                df_trend['Pct_Dis'] = (df_trend['Distribusi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
+
+                df_trend['Label_Aku'] = df_trend['Pct_Aku'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
+                df_trend['Label_Dis'] = df_trend['Pct_Dis'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
+                
+                df_melt = df_trend.melt(
+                    id_vars=['Date', 'Pct_Aku', 'Pct_Dis'], 
+                    value_vars=['Akumulasi (Top 5)', 'Distribusi (Top 5)'], 
+                    var_name='Kategori', 
+                    value_name='Nilai'
+                )
+                df_melt['Persentase (%)'] = df_melt.apply(lambda row: row['Pct_Aku'] if 'Akumulasi' in row['Kategori'] else row['Pct_Dis'], axis=1)
+                
+                color_scale_trend = alt.Scale(
+                    domain=['Akumulasi (Top 5)', 'Distribusi (Top 5)'],
+                    range=['#2ecc71', '#e74c3c'] 
+                )
+                
+                bars = alt.Chart(df_melt).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=25).encode(
+                    x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
+                    y=alt.Y('Nilai:Q', title='Net Value (Rp)', axis=alt.Axis(format='~s')),
+                    color=alt.Color('Kategori:N', scale=color_scale_trend, legend=alt.Legend(title=None, orient='top')),
+                    tooltip=['Date', 'Kategori', alt.Tooltip('Nilai:Q', format=',.0f', title='Net Value (Rp)'), alt.Tooltip('Persentase (%):Q', format='.1f')]
+                )
+
+                text_aku = alt.Chart(df_trend).mark_text(dy=-12, color='#22c55e', fontWeight='bold', fontSize=12).encode(
+                    x=alt.X('Date:O'),
+                    y=alt.Y('Akumulasi (Top 5):Q'),
+                    text=alt.Text('Label_Aku:N')
+                )
+
+                text_dis = alt.Chart(df_trend).mark_text(dy=12, color='#ef4444', fontWeight='bold', fontSize=12).encode(
+                    x=alt.X('Date:O'),
+                    y=alt.Y('Distribusi (Top 5):Q'),
+                    text=alt.Text('Label_Dis:N')
+                )
+                
+                rule = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
+                
+                st.altair_chart(alt.layer(bars, text_aku, text_dis, rule).properties(height=380), use_container_width=True)
+
+            st.write("---")
+            st.markdown(f"## 🤖 AI Trading Assistant: {emiten_res}")
+            
+            if total_transaksi > 0:
+                if total_akumulasi > total_distribusi and prob_naik >= 55:
+                    ai_rekomendasi = "🚀 ACTION: STRONG BUY"
+                    ai_color = "#22c55e" 
+                    
+                    if current_price > 0 and bandar_vwap > 0:
+                        if current_price > (bandar_vwap * 1.05):
+                            area_entry = f"Rp {int(bandar_vwap):,} - Rp {int(bandar_vwap * 1.02):,}<br><span style='font-size:11px; color:#fbbf24;'>(Tunggu Pullback, Jangan Kejar Atas)</span>"
+                            cl_price = f"Rp {int(bandar_vwap * 0.97):,}"
+                            tp_price = f"Rp {int(current_price * 1.05):,}"
+                        else:
+                            area_entry = f"Rp {int(current_price):,} - Rp {int(current_price * 1.01):,}<br><span style='font-size:11px; color:#4ade80;'>(HAKA / Harga Dekat Bandar)</span>"
+                            cl_price = f"Rp {int(min(current_price, bandar_vwap) * 0.97):,}"
+                            tp_price = f"Rp {int(current_price * 1.05):,} - Rp {int(current_price * 1.10):,}"
+                    else:
+                        area_entry = f"Rp {int(bandar_vwap):,}<br><span style='font-size:11px; color:#cbd5e1;'>(Area Modal Bandar)</span>"
+                        tp_price = f"Rp {int(bandar_vwap * 1.05):,}"
+                        cl_price = f"Rp {int(bandar_vwap * 0.97):,}"
+                        
+                else:
+                    ai_rekomendasi = "🛑 ACTION: AVOID / WAIT & SEE"
+                    ai_color = "#ef4444" 
+                    area_entry = "-"
+                    tp_price = "-"
+                    cl_price = "-"
+
+                ai_html = f"""<div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);">
+<h4 style="color: #94a3b8; margin-top: 0; text-align: center; font-size: 14px; letter-spacing: 2px; text-transform: uppercase;">⚡ Kalkulasi Algoritma Scalper ⚡</h4>
+<div style="text-align: center; font-size: 32px; font-weight: 900; color: {ai_color}; margin-bottom: 25px; text-shadow: 0 0 15px {ai_color}80;">{ai_rekomendasi}</div>
+<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+<div style="flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #3b82f6;">
+<div style="font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px;">📍 AREA ENTRY</div>
+<div style="font-size: 18px; font-weight: 800; color: #f8fafc; line-height: 1.3;">{area_entry}</div>
 </div>
-<div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #fbbf24; color: #1e293b;">
-<div style="font-size: 11px; font-weight: bold;">🎯 RESISTANCE 1</div><div style="font-size: 18px; font-weight: 800;">Rp {r1:,.0f}</div>
+<div style="flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #22c55e;">
+<div style="font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px;">🎯 TARGET PROFIT (+5% s/d 10%)</div>
+<div style="font-size: 20px; font-weight: 800; color: #4ade80;">{tp_price}</div>
 </div>
-<div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #94a3b8; color: #1e293b;">
-<div style="font-size: 11px; font-weight: bold;">⚖️ PIVOT POINT</div><div style="font-size: 18px; font-weight: 800;">Rp {pivot:,.0f}</div>
+<div style="flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #ef4444;">
+<div style="font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px;">✂️ STRICT CUT LOSS (-3%)</div>
+<div style="font-size: 20px; font-weight: 800; color: #f87171;">{cl_price}</div>
 </div>
-<div style="flex: 1; background: #eff6ff; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #60a5fa; color: #1e293b;">
-<div style="font-size: 11px; font-weight: bold;">📉 SUPPORT 1</div><div style="font-size: 18px; font-weight: 800;">Rp {s1:,.0f}</div>
+<div style="flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #eab308;">
+<div style="font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px;">⚖️ AI WIN RATE</div>
+<div style="font-size: 24px; font-weight: 900; color: #facc15;">{prob_naik:.1f}%</div>
 </div>
-<div style="flex: 1; background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #ef4444; color: #1e293b;">
-<div style="font-size: 11px; font-weight: bold;">✂️ SUPPORT 2</div><div style="font-size: 18px; font-weight: 800;">Rp {s2:,.0f}</div>
 </div>
 </div>"""
-                    st.markdown(pivot_box, unsafe_allow_html=True)
-            except: pass
+                st.markdown(ai_html, unsafe_allow_html=True)
+
+                if warna == "success": st.success(f"### DIAGNOSA DATA: {status}")
+                elif warna == "info": st.info(f"### DIAGNOSA DATA: {status}")
+                elif warna == "warning": st.warning(f"### DIAGNOSA DATA: {status}")
+                else: st.error(f"### DIAGNOSA DATA: {status}")
+
+                st.markdown(f"**📖 Analisis Pergerakan:**\n{analisa_teks}")
+                st.markdown(f"**🎯 Trading Plan (Order Book Focus):**\n{aksi_teks}")
+                
+                if not df_akumulasi_top5.empty:
+                    broker_top = df_akumulasi_top5.iloc[0]['Broker']
+                    tipe_top, _ = get_kategori_broker(broker_top)
+                    st.markdown(f"**👑 Aktor Utama:** Broker **{broker_top}** ({tipe_top}) adalah pengumpul terbanyak. Pantau apakah besok broker ini masih lanjut HAKA.")
+
+# 4. MENU PENGATURAN API
+elif pilihan_menu == "⚙️ Pengaturan API":
+    st.title("Pengaturan API")
+    st.markdown("Masukkan *API Key* dari **invezgo.com** Anda di sini untuk menarik data bursa.")
+    
+    api_key_input = st.text_input("API Key Invezgo:", value=st.session_state['api_key'], type="password")
+    if st.button("Simpan API Key Permanen"):
+        st.session_state['api_key'] = api_key_input
+        simpan_api_key(api_key_input)
+        st.success("✅ API Key berhasil disimpan ke sistem! Anda tidak perlu memasukkannya lagi saat membuka aplikasi. Silakan kembali ke menu Screener.")
