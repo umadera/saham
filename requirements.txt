@@ -5,3 +5,4 @@ requests
 altair
 schedule
 plotly
+numpy
