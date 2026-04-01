@@ -186,6 +186,7 @@ if st.session_state["menu_navigasi"] == "🏠 Halaman Depan":
     st.success("Sistem siap digunakan. Silakan pilih menu di sebelah kiri untuk mulai mencari cuan.")
 
 elif st.session_state["menu_navigasi"] == "📊 Deteksi Saham Cepat":
+    # Panggil file teknikal Anda
     import screener_teknikal
     screener_teknikal.jalankan_teknikal()
 
@@ -481,7 +482,7 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                         params_trend = {
                             "from": start_date.strftime("%Y-%m-%d"),
                             "to": end_date.strftime("%Y-%m-%d"),
-                            "scope": "val", # KEMBALI MENGGUNAKAN VAL
+                            "scope": "val",
                             "investor": "all",
                             "market": "RG"
                         }
@@ -492,7 +493,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                             raw_broker_hist = broker_hist 
                             
                             daily_dict = {}
-                            # --- RUMUS MENGHITUNG DELTA HARIAN MURNI DARI DATA KUMULATIF ---
                             for b in broker_hist:
                                 b_code = b.get('broker', '')
                                 if b_code in top_acc_list or b_code in top_dist_list:
@@ -513,7 +513,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                                                 daily_dict[dt]['Akumulasi (Top 5)'] += val
                                             if b_code in top_dist_list:
                                                 daily_dict[dt]['Distribusi (Top 5)'] += val 
-                            # ----------------------------------------------------------------
                                             
                             df_trend = pd.DataFrame(list(daily_dict.values()))
                             if not df_trend.empty:
@@ -763,6 +762,10 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             """, unsafe_allow_html=True)
             # =====================================================================
 
+            # =====================================================================
+            # 🚀 BAR CHARTS (TOP 5 BELI JUAL)
+            # =====================================================================
+            st.write("---")
             col_chart1, col_chart2 = st.columns(2)
             
             df_aku_chart = df_akumulasi_top5.copy()
@@ -1010,10 +1013,8 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                 if broker_data and 'data' in broker_data:
                     df_broker_harian = pd.DataFrame(broker_data['data'])
                     if not df_broker_harian.empty:
-                        # --- PERBAIKAN RUMUS DAILY DELTA PER BROKER ---
                         df_broker_harian['value_cum'] = df_broker_harian['value'].astype(float)
                         df_broker_harian['value'] = df_broker_harian['value_cum'].diff().fillna(df_broker_harian['value_cum'])
-                        # ----------------------------------------------
                         
                         df_broker_harian['Warna'] = df_broker_harian['value'].apply(lambda x: '#2ecc71' if x >= 0 else '#e74c3c')
                         df_broker_harian['Label'] = df_broker_harian['value'].apply(format_rupiah)
@@ -1103,54 +1104,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
                 else:
                     st.info("Tidak ada data yang jual")
-
-            if not df_trend.empty:
-                st.write("---")
-                st.markdown("### 📈 Riwayat Kekuatan Bandar Dari Hari ke Hari")
-                st.markdown("Grafik ini menunjukkan apakah Bandar (Top 5 Gabungan) terus menambah belanjaan tiap hari (hijau membesar), atau malah asyik jualan (merah membesar).")
-                
-                df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
-                df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-                df_trend['Pct_Dis'] = (df_trend['Distribusi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-
-                df_trend['Label_Aku'] = df_trend['Pct_Aku'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                df_trend['Label_Dis'] = df_trend['Pct_Dis'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                
-                df_melt = df_trend.melt(
-                    id_vars=['Date', 'Pct_Aku', 'Pct_Dis'], 
-                    value_vars=['Akumulasi (Top 5)', 'Distribusi (Top 5)'], 
-                    var_name='Kategori', 
-                    value_name='Nilai'
-                )
-                df_melt['Persentase (%)'] = df_melt.apply(lambda row: row['Pct_Aku'] if 'Akumulasi' in row['Kategori'] else row['Pct_Dis'], axis=1)
-                
-                color_scale_trend = alt.Scale(
-                    domain=['Akumulasi (Top 5)', 'Distribusi (Top 5)'],
-                    range=['#2ecc71', '#e74c3c'] 
-                )
-                
-                bars = alt.Chart(df_melt).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=25).encode(
-                    x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
-                    y=alt.Y('Nilai:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s')),
-                    color=alt.Color('Kategori:N', scale=color_scale_trend, legend=alt.Legend(title=None, orient='top')),
-                    tooltip=['Date', 'Kategori', alt.Tooltip('Nilai:Q', format=',.0f', title='Jumlah Uang (Rp)'), alt.Tooltip('Persentase (%):Q', format='.1f')]
-                )
-
-                text_aku = alt.Chart(df_trend).mark_text(dy=-12, color='#22c55e', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Akumulasi (Top 5):Q'),
-                    text=alt.Text('Label_Aku:N')
-                )
-
-                text_dis = alt.Chart(df_trend).mark_text(dy=12, color='#ef4444', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Distribusi (Top 5):Q'),
-                    text=alt.Text('Label_Dis:N')
-                )
-                
-                rule = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
-                
-                st.altair_chart(alt.layer(bars, text_aku, text_dis, rule).properties(height=380), use_container_width=True)
 
             st.write("---")
             st.markdown(f"## 🤖 Kesimpulan Robot Untuk Saham Ini: {emiten_res}")
