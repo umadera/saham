@@ -703,7 +703,7 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                 """, unsafe_allow_html=True)
 
             # =====================================================================
-            # 🚀 KOTAK KESIMPULAN 3 METRIK DEWA (YANG ANDA MINTA)
+            # 🚀 KOTAK KESIMPULAN 3 METRIK DEWA 
             # =====================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -867,10 +867,10 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             </div>
             """, unsafe_allow_html=True)
 
-            col_search_speed1, col_search_speed2 = st.columns([1.2, 2])
+            col_search_speed1, col_search_speed2 = st.columns([1, 2.5])
             
             with col_search_speed1:
-                st.markdown("<div style='font-size: 14px; font-weight: 800; margin-bottom: 5px; color: #1e293b;'>🔍 Cari Info Kode Broker:</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-size: 13px; font-weight: 800; margin-bottom: 2px; color: #475569;'>🔍 Cari Info Kode Broker:</div>", unsafe_allow_html=True)
                 search_query = st.text_input("Ketik Kode / Nama Broker", label_visibility="collapsed", placeholder="Contoh: AK atau Mandiri").strip()
                 
                 if search_query:
@@ -893,45 +893,43 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     meter_html = f"""
                     <style>
                     .broker-action-container {{
-                        width: 100%; padding: 15px 20px;
-                        background-color: rgba(15, 23, 42, 0.7); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                        width: 100%; padding: 5px 15px; margin-top: 5px;
+                        background: transparent;
                     }}
                     .broker-action-title {{
-                        font-weight: 800; font-size: 14px; margin-bottom: 15px; color: #f8fafc; text-align: center; letter-spacing: 1px;
+                        font-weight: 800; font-size: 12px; margin-bottom: 8px; color: #64748b; text-align: center; text-transform: uppercase;
                     }}
                     .bar-wrapper {{
-                        position: relative; height: 14px; border-radius: 7px; display: flex; overflow: hidden;
-                        box-shadow: 0 0 8px rgba(0,0,0,0.8) inset;
+                        position: relative; height: 10px; border-radius: 5px; display: flex; overflow: hidden;
+                        background: #f1f5f9; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
                     }}
                     .bar-segment {{
-                        flex: 1; border-right: 1px solid rgba(0,0,0,0.5);
+                        flex: 1; border-right: 1px solid rgba(255,255,255,0.3);
                     }}
                     .bar-segment:last-child {{ border-right: none; }}
-                    .bg-big-dist {{ background-color: #dc2626; }}
-                    .bg-dist {{ background-color: #ef4444; }}
-                    .bg-neutral {{ background-color: #94a3b8; }}
-                    .bg-acc {{ background-color: #22c55e; }}
-                    .bg-big-acc {{ background-color: #16a34a; }}
+                    .bg-big-dist {{ background-color: #ef4444; }}
+                    .bg-dist {{ background-color: #f87171; }}
+                    .bg-neutral {{ background-color: #cbd5e1; }}
+                    .bg-acc {{ background-color: #4ade80; }}
+                    .bg-big-acc {{ background-color: #22c55e; }}
 
                     .marker-container {{
-                        position: absolute; top: -8px; bottom: -8px; left: {posisi_marker:.1f}%;
+                        position: absolute; top: -5px; bottom: -5px; left: {posisi_marker:.1f}%;
                         transform: translateX(-50%); z-index: 10;
                         display: flex; flex-direction: column; align-items: center; justify-content: center;
                         transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
                     }}
                     .marker-line {{
-                        width: 6px; height: 30px; background-color: #fde047; border-radius: 3px;
-                        box-shadow: 0 0 10px 2px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
+                        width: 4px; height: 20px; background-color: #1e293b; border-radius: 2px;
+                        box-shadow: 0 0 4px rgba(0,0,0,0.3);
                     }}
                     .labels {{
-                        display: flex; justify-content: space-between; font-size: 12px; color: #ffffff; margin-top: 12px; font-weight: 700;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+                        display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 6px; font-weight: 700;
                     }}
                     </style>
 
                     <div class="broker-action-container">
-                        <div class="broker-action-title">📊 JARUM KECEPATAN BANDAR 📊</div>
+                        <div class="broker-action-title">📊 JARUM KECEPATAN BANDAR</div>
                         <div class="bar-wrapper">
                             <div class="bar-segment bg-big-dist"></div>
                             <div class="bar-segment bg-dist"></div>
@@ -943,9 +941,9 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                             </div>
                         </div>
                         <div class="labels">
-                            <span style="color: #fca5a5;">🩸 Bahaya</span>
-                            <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Ragu-ragu</span>
-                            <span style="color: #86efac;">🚀 Aman</span>
+                            <span style="color: #ef4444;">🩸 Bahaya</span>
+                            <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #94a3b8;">⚖️ Ragu-ragu</span>
+                            <span style="color: #22c55e;">🚀 Aman</span>
                         </div>
                     </div>
                     """
