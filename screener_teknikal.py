@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import time
-import plotly.graph_objects as go
+import streamlit.components.v1 as components
 
 # --- FUNGSI KALKULASI INDIKATOR TEKNIKAL PANDAS ---
 def calculate_rsi(data, periods=14):
@@ -45,11 +45,12 @@ def detect_patterns(curr, prev):
     elif is_doji: return "⚖️ Doji"
     else: return "-"
 
-# 🟢 FUNGSI 1: MESIN COPET LIVE (INTRADAY)
+# 🟢 FUNGSI 1: MESIN COPET LIVE (INTRADAY + SOUND ALERT)
 def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf, period_yf):
     st.markdown(f"#### 🔍 Memindai Peluang Live di: **{nama_sektor}** (TF {tf_label})")
     bar_instan = st.progress(0, text="Mengumpulkan data Market Real-Time...")
     hasil_instan = []
+    cuan_detected = False # 🔔 Flag untuk Sound Alert
 
     for i, ticker in enumerate(daftar_ticker):
         bar_instan.progress((i) / len(daftar_ticker), text=f"Menganalisa momentum {ticker}...")
@@ -66,7 +67,6 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
                 last_c = df.iloc[-1]; prev_c = df.iloc[-2]
                 cur_price = float(last_c['Close']); vwap_price = float(last_c['VWAP'])
                 
-                # Tambahan Data RSI & MACD
                 rsi_val = float(last_c['RSI'])
                 macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
                 rsi_stat = "🟢" if rsi_val < 30 else "🔴" if rsi_val > 70 else "🟡"
@@ -94,10 +94,19 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
                 support = df['Low'].tail(20).min()
                 
                 if score > 0: 
+                    if score >= 6: cuan_detected = True # Jika ada saham potensial tinggi, nyalakan alarm
                     hasil_instan.append({"Saham": ticker, "Harga": cur_price, "VWAP": vwap_price, "Support": support, "Score": score, "Alasan": " + ".join(alasan) if alasan else "Momentum Netral", "Pct_Change": pct_change, "RSI_Val": rsi_val, "RSI_Stat": rsi_stat, "MACD_Stat": macd_stat})
         except: pass
     
     bar_instan.empty()
+
+    # 🔔 TRIGGER SOUND ALERT JIKA ADA SAHAM POTENSIAL
+    if cuan_detected:
+        st.markdown("""
+        <audio autoplay style="display:none;">
+            <source src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" type="audio/ogg">
+        </audio>
+        """, unsafe_allow_html=True)
 
     if hasil_instan:
         hasil_instan.sort(key=lambda x: x['Score'], reverse=True)
@@ -136,7 +145,7 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
         st.warning(f"⚠️ Market sedang lesu. Tidak ada saham momentum pada TF {tf_label} saat ini.")
 
 
-# 🟢 FUNGSI 2: MESIN PERSIAPAN BESOK DENGAN HARGA BANDAR & RENTANG
+# 🟢 FUNGSI 2: MESIN PERSIAPAN BESOK (EOD / BSJP)
 def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_label):
     st.markdown(f"#### 🌙 Memindai Persiapan BSJP di: **{nama_sektor}** ({start_d.strftime('%d %b %Y')} - {end_d.strftime('%d %b %Y')})")
     bar_eod = st.progress(0, text="Mengumpulkan data Harian (EOD)...")
@@ -163,7 +172,6 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
                 last_c = df.iloc[-1]; prev_c = df.iloc[-2]
                 cur_price = float(last_c['Close'])
                 
-                # Tambahan Data RSI & MACD
                 rsi_val = float(last_c['RSI'])
                 macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
                 rsi_stat = "🟢" if rsi_val < 40 else "🔴" if rsi_val > 70 else "🟡"
@@ -184,7 +192,6 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
                 pola = detect_patterns(last_c, prev_c)
                 if pola != "-": score += 2; alasan.append(pola)
 
-                # LOGIKA HARGA BANDAR & AMAN BERDASARKAN RENTANG WAKTU
                 df_range = df.loc[start_d.strftime('%Y-%m-%d') : end_d.strftime('%Y-%m-%d')]
                 if not df_range.empty and len(df_range) > 1:
                     high_range = df_range['High'].max()
@@ -255,30 +262,12 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
 </div>
 </div>
 <div style="display: flex; justify-content: space-around; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar</div>
-<div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['Bandar_Avg']:,.0f}</div>
-</div>
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 High</div>
-<div style="font-size: 14px; font-weight: 800; color: #10b981;">Rp {item['High']:,.0f}</div>
-</div>
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Low</div>
-<div style="font-size: 14px; font-weight: 800; color: #ef4444;">Rp {item['Low']:,.0f}</div>
-</div>
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Beli Aman</div>
-<div style="font-size: 14px; font-weight: 800; color: #3b82f6;">Rp {item['Aman']:,.0f}</div>
-</div>
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div>
-<div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div>
-</div>
-<div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD</div>
-<div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div>
-</div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar</div><div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['Bandar_Avg']:,.0f}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 High</div><div style="font-size: 14px; font-weight: 800; color: #10b981;">Rp {item['High']:,.0f}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Low</div><div style="font-size: 14px; font-weight: 800; color: #ef4444;">Rp {item['Low']:,.0f}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Beli Aman</div><div style="font-size: 14px; font-weight: 800; color: #3b82f6;">Rp {item['Aman']:,.0f}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div></div>
 </div>
 <div style="width: 100%; font-size: 13px; color: #475569;">🌙 <b>Kekuatan Harian:</b> {item['Alasan']}</div>
 </div>"""
@@ -306,8 +295,8 @@ def jalankan_teknikal():
 
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 25px 30px; border-radius: 12px; border-left: 8px solid #f59e0b; margin-bottom: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.2);">
-        <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V4.0 ⚡</h2>
-        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Gunakan Tab <b>Live</b> untuk copet jam bursa, dan Tab <b>Persiapan Besok</b> untuk riset santai malam hari!</p>
+        <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V5.0 ⚡ (God-Tier Edition)</h2>
+        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Integrasi Auto-Pilot, Sound Alert Cuan, Export CSV, dan Live Chart TradingView Asli.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -315,32 +304,36 @@ def jalankan_teknikal():
         "🚀 Top 5 Copet (Live)", 
         "📅 Persiapan Besok (EOD)", 
         "⚙️ Mass Screener", 
-        "🔍 Bedah Chart"
+        "🔍 Bedah Chart (TradingView)"
     ])
 
     # ==============================================================================
-    # TAB 1: TOP 5 COPET KILAT (LIVE INTRADAY)
+    # TAB 1: TOP 5 COPET KILAT (LIVE INTRADAY + AUTO PILOT)
     # ==============================================================================
     with tab_live:
-        col_title, col_manage = st.columns([4, 1.5])
+        col_title, col_manage = st.columns([3, 2])
         with col_title:
             st.markdown("### 🎯 Mesin Copet Live Market")
         with col_manage:
-            with st.expander("⚙️ Kelola Kategori"):
-                st.markdown("#### ➕ Tambah")
-                new_sec_name = st.text_input("Nama Kategori", placeholder="Cth: 🚀 Saham AI")
-                new_sec_stocks = st.text_input("Kode Saham", placeholder="GOTO, BUKA")
-                if st.button("💾 Simpan", use_container_width=True):
-                    if new_sec_name and new_sec_stocks:
-                        st.session_state['db_sektor'][new_sec_name] = [s.strip().upper() for s in new_sec_stocks.split(",")]
-                        st.rerun()
-                st.markdown("---")
-                st.markdown("#### 🗑️ Hapus")
-                sektor_to_delete = st.selectbox("Pilih Kategori:", list(st.session_state['db_sektor'].keys()))
-                if st.button("Hapus Kategori", type="secondary", use_container_width=True):
-                    if sektor_to_delete in st.session_state['db_sektor']:
-                        del st.session_state['db_sektor'][sektor_to_delete]
-                        st.rerun()
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            # 🔄 SAKLAR AUTO-PILOT
+            auto_pilot = st.toggle("🔄 Auto-Pilot (Scan Otomatis Tiap 60 Detik)")
+
+        with st.expander("⚙️ Kelola Kategori Sektoral"):
+            st.markdown("#### ➕ Tambah")
+            new_sec_name = st.text_input("Nama Kategori", placeholder="Cth: 🚀 Saham AI")
+            new_sec_stocks = st.text_input("Kode Saham", placeholder="GOTO, BUKA")
+            if st.button("💾 Simpan", use_container_width=True):
+                if new_sec_name and new_sec_stocks:
+                    st.session_state['db_sektor'][new_sec_name] = [s.strip().upper() for s in new_sec_stocks.split(",")]
+                    st.rerun()
+            st.markdown("---")
+            st.markdown("#### 🗑️ Hapus")
+            sektor_to_delete = st.selectbox("Pilih Kategori:", list(st.session_state['db_sektor'].keys()))
+            if st.button("Hapus Kategori", type="secondary", use_container_width=True):
+                if sektor_to_delete in st.session_state['db_sektor']:
+                    del st.session_state['db_sektor'][sektor_to_delete]
+                    st.rerun()
 
         opsi_kategori = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
         opsi_tf = ["1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam"]
@@ -350,10 +343,11 @@ def jalankan_teknikal():
         col_sel, col_tf, col_btn = st.columns([2, 1, 1.5])
         with col_sel: pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
         with col_tf: tf_pilihan_copet = st.selectbox("Timeframe:", opsi_tf, index=1, label_visibility="collapsed")
-        with col_btn: eksekusi_copet = st.button("⚡ SCAN LIVE", type="primary", use_container_width=True)
+        with col_btn: eksekusi_copet = st.button("⚡ SCAN LIVE MANUAL", type="primary", use_container_width=True, disabled=auto_pilot)
         st.markdown("</div>", unsafe_allow_html=True)
         
-        if eksekusi_copet:
+        # 🔄 LOGIKA AUTO PILOT
+        if eksekusi_copet or auto_pilot:
             interval_yf, period_yf = tf_map_copet[tf_pilihan_copet]
             st.markdown("---")
             if pilihan_kategori == "⭐ Watchlist Favorit Saya":
@@ -363,6 +357,11 @@ def jalankan_teknikal():
             else:
                 tickers = st.session_state['db_sektor'][pilihan_kategori]
                 jalankan_mesin_copet_live(pilihan_kategori, tickers, tf_pilihan_copet, interval_yf, period_yf)
+            
+            # Jika Autopilot menyala, tidur 60 detik lalu eksekusi ulang
+            if auto_pilot:
+                time.sleep(60)
+                st.rerun()
 
 
     # ==============================================================================
@@ -383,53 +382,27 @@ def jalankan_teknikal():
         )
 
         today = datetime.date.today()
-        if preset_eod == "1 Hari":
-            default_start = today - datetime.timedelta(days=1)
-            default_end = today
-        elif preset_eod == "1 Minggu":
-            default_start = today - datetime.timedelta(weeks=1)
-            default_end = today
-        elif preset_eod == "1 Bulan":
-            default_start = today - datetime.timedelta(days=30)
-            default_end = today
-        elif preset_eod == "3 Bulan":
-            default_start = today - datetime.timedelta(days=90)
-            default_end = today
-        elif preset_eod == "6 Bulan":
-            default_start = today - datetime.timedelta(days=180)
-            default_end = today
-        elif preset_eod == "1 Tahun":
-            default_start = today - datetime.timedelta(days=365)
-            default_end = today
-        else: # Custom
-            default_start = today - datetime.timedelta(days=14)
-            default_end = today
+        if preset_eod == "1 Hari": default_start = today - datetime.timedelta(days=1); default_end = today
+        elif preset_eod == "1 Minggu": default_start = today - datetime.timedelta(weeks=1); default_end = today
+        elif preset_eod == "1 Bulan": default_start = today - datetime.timedelta(days=30); default_end = today
+        elif preset_eod == "3 Bulan": default_start = today - datetime.timedelta(days=90); default_end = today
+        elif preset_eod == "6 Bulan": default_start = today - datetime.timedelta(days=180); default_end = today
+        elif preset_eod == "1 Tahun": default_start = today - datetime.timedelta(days=365); default_end = today
+        else: default_start = today - datetime.timedelta(days=14); default_end = today
         
         st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px; border-left: 5px solid #8b5cf6;'>", unsafe_allow_html=True)
         col_sel_eod, col_date_eod, col_btn_eod = st.columns([2, 2, 1.5])
         
-        with col_sel_eod:
-            pilihan_kategori_eod = st.selectbox("Pilih Kategori (EOD):", opsi_kategori_eod, label_visibility="collapsed")
-        with col_date_eod:
-            tanggal_eod = st.date_input(
-                "Rentang Tanggal:", 
-                value=(default_start, default_end), 
-                max_value=today, 
-                label_visibility="collapsed"
-            )
-        with col_btn_eod:
-            eksekusi_eod = st.button("💼 SCAN DATA HARIAN", type="primary", use_container_width=True)
-            
+        with col_sel_eod: pilihan_kategori_eod = st.selectbox("Pilih Kategori (EOD):", opsi_kategori_eod, label_visibility="collapsed")
+        with col_date_eod: tanggal_eod = st.date_input("Rentang Tanggal:", value=(default_start, default_end), max_value=today, label_visibility="collapsed")
+        with col_btn_eod: eksekusi_eod = st.button("💼 SCAN DATA HARIAN", type="primary", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
         if eksekusi_eod:
             st.markdown("---")
-            if isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 2:
-                start_d, end_d = tanggal_eod
-            elif isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 1:
-                start_d = end_d = tanggal_eod[0]
-            else:
-                start_d = end_d = tanggal_eod
+            if isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 2: start_d, end_d = tanggal_eod
+            elif isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 1: start_d = end_d = tanggal_eod[0]
+            else: start_d = end_d = tanggal_eod
 
             if pilihan_kategori_eod == "⭐ Watchlist Favorit Saya":
                 default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
@@ -441,7 +414,7 @@ def jalankan_teknikal():
 
 
     # ==============================================================================
-    # TAB 3: MASS SCREENER ADVANCE
+    # TAB 3: MASS SCREENER ADVANCE (DENGAN TOMBOL EXCEL)
     # ==============================================================================
     with tab_massal:
         st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
@@ -505,10 +478,7 @@ def jalankan_teknikal():
                         elif last_c['MA5'] < last_c['MA20'] and prev_c['MA5'] >= prev_c['MA20']: trend_status = "💀 DEAD CROSS"
                         else: trend_status = "⚖️ SIDEWAYS"
 
-                        if rsi_val < 30: rsi_status = "🟢 OVERSOLD"
-                        elif rsi_val > 70: rsi_status = "🔴 OVERBOUGHT"
-                        else: rsi_status = "🟡 NEUTRAL"
-
+                        rsi_status = "🟢 OVERSOLD" if rsi_val < 30 else "🔴 OVERBOUGHT" if rsi_val > 70 else "🟡 NEUTRAL"
                         vol_surge = "💥 ADA LONJAKAN" if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5) else "Normal"
                         macd_status = "📈 Bullish" if last_c['MACD'] > last_c['Signal'] else "📉 Bearish"
                         vwap_status = "✅ Di Atas VWAP" if cur_price >= vwap_val else "⚠️ Di Bawah VWAP"
@@ -575,66 +545,81 @@ def jalankan_teknikal():
                 return ''
 
             st.dataframe(df_tampil.style.applymap(color_tek, subset=['Pola', 'VWAP', 'RSI', 'Trend', 'MACD', 'Vol Surge']), use_container_width=True, hide_index=True)
+            
+            # 📥 TOMBOL DOWNLOAD EXCEL (CSV)
+            csv = df_tampil.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Data Screener (CSV)",
+                data=csv,
+                file_name=f"Mass_Screener_Result_{datetime.date.today()}.csv",
+                mime="text/csv",
+            )
 
 
     # ==============================================================================
-    # TAB 4: BEDAH CHART TUNGGAL
+    # TAB 4: BEDAH CHART (WIDGET TRADINGVIEW ASLI)
     # ==============================================================================
     with tab_single:
         st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
         col_inp1, col_inp2, col_inp3 = st.columns([1.5, 2, 1])
-        with col_inp1: single_ticker = st.text_input("🔍 Kode Saham:", "BREN", key="single_tek").upper()
-        with col_inp2: single_tf = st.selectbox("⏱️ Timeframe Analisa:", ["1 Hari (Daily)", "1 Jam (60m)", "30 Menit (30m)", "15 Menit (15m)", "5 Menit (5m)"], index=0, key="tf_single")
+        with col_inp1: single_ticker = st.text_input("🔍 Kode Saham (Tanpa .JK):", "BREN", key="single_tek").upper()
+        
+        # Mapping Timeframe Khusus TradingView
+        tv_tf_opsi = ["1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam", "1 Hari"]
+        tv_tf_map = {"1 Menit": "1", "5 Menit": "5", "15 Menit": "15", "30 Menit": "30", "1 Jam": "60", "1 Hari": "D"}
+        
+        with col_inp2: single_tf = st.selectbox("⏱️ Timeframe Analisa:", tv_tf_opsi, index=1, key="tf_single_tv")
         with col_inp3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            btn_single_tek = st.button("🚀 Load Chart", use_container_width=True)
+            btn_single_tek = st.button("🚀 Load TradingView", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
         if btn_single_tek:
             if not single_ticker: st.error("Masukkan kode saham."); st.stop()
-
-            tf_map_single = {"1 Hari (Daily)": "1d", "1 Jam (60m)": "60m", "30 Menit (30m)": "30m", "15 Menit (15m)": "15m", "5 Menit (5m)": "5m"}
-            s_interval = tf_map_single[single_tf]
             
-            my_bar = st.progress(50, text="Mengambil data chart interaktif...")
+            symbol_tv = f"IDX:{single_ticker}"
+            interval_tv = tv_tf_map[single_tf]
             
+            st.markdown(f"### 📈 Live Chart: {single_ticker} (TF: {single_tf})")
+            
+            # 📈 WIDGET HTML TRADINGVIEW (100% REAL-TIME)
+            tv_html = f"""
+            <div class="tradingview-widget-container">
+              <div id="tradingview_12345"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+              <script type="text/javascript">
+              new TradingView.widget(
+              {{
+              "width": "100%",
+              "height": 550,
+              "symbol": "{symbol_tv}",
+              "interval": "{interval_tv}",
+              "timezone": "Asia/Jakarta",
+              "theme": "light",
+              "style": "1",
+              "locale": "id",
+              "enable_publishing": false,
+              "hide_top_toolbar": false,
+              "save_image": false,
+              "container_id": "tradingview_12345"
+            }}
+              );
+              </script>
+            </div>
+            """
+            # Render Widget HTML di dalam Streamlit
+            components.html(tv_html, height=560)
+            
+            # 🎯 PIVOT BOX TETAP DIPERTAHANKAN (Menggunakan data Harian YFinance)
             try:
-                if s_interval == "1d": df_chart = yf.Ticker(f"{single_ticker}.JK").history(period="6mo", interval="1d")
-                else: df_chart = yf.Ticker(f"{single_ticker}.JK").history(period="1mo" if s_interval in ["60m", "30m"] else "5d", interval=s_interval)
-                
                 df_daily = yf.Ticker(f"{single_ticker}.JK").history(period="1mo", interval="1d")
-                
-                if df_chart.empty or len(df_chart) < 25 or df_daily.empty:
-                    st.error("Data tidak ditemukan."); my_bar.empty(); st.stop()
-
-                df_chart['RSI'] = calculate_rsi(df_chart); df_chart['MACD'], df_chart['Signal'] = calculate_macd(df_chart)
-                df_chart['MA5'] = df_chart['Close'].rolling(window=5).mean(); df_chart['MA20'] = df_chart['Close'].rolling(window=20).mean()
-                df_chart['Vol_MA5'] = df_chart['Volume'].rolling(window=5).mean(); df_chart['VWAP'] = calculate_vwap(df_chart)
-
-                last_c = df_chart.iloc[-1]; prev_c = df_chart.iloc[-2]
-                cur_price = float(last_c['Close']); vwap_price = float(last_c['VWAP'])
-
-                prev_day = df_daily.iloc[-2]
-                pivot = (prev_day['High'] + prev_day['Low'] + prev_day['Close']) / 3
-                r1 = (pivot * 2) - prev_day['Low']; s1 = (pivot * 2) - prev_day['High']
-                r2 = pivot + (prev_day['High'] - prev_day['Low']); s2 = pivot - (prev_day['High'] - prev_day['Low'])
-                
-                my_bar.empty()
-
-                df_plot = df_chart.tail(90).reset_index() 
-                if 'index' in df_plot.columns: df_plot.rename(columns={'index': 'Date'}, inplace=True)
-                if 'Datetime' in df_plot.columns: df_plot.rename(columns={'Datetime': 'Date'}, inplace=True)
-
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(x=df_plot['Date'], open=df_plot['Open'], high=df_plot['High'], low=df_plot['Low'], close=df_plot['Close'], name='Candle', increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
-                fig.add_trace(go.Scatter(x=df_plot['Date'], y=df_plot['MA5'], mode='lines', line=dict(color='#2962ff', width=1.5), name='MA5'))
-                fig.add_trace(go.Scatter(x=df_plot['Date'], y=df_plot['MA20'], mode='lines', line=dict(color='#ff9800', width=1.5), name='MA20'))
-                fig.add_trace(go.Scatter(x=df_plot['Date'], y=df_plot['VWAP'], mode='lines', line=dict(color='#9c27b0', width=2, dash='dash'), name='VWAP'))
-
-                fig.update_layout(title=dict(text=f"Chart {single_ticker} (TF: {single_tf})", font=dict(size=14)), yaxis_title="Harga (Rp)", xaxis_title="", template="plotly_white", xaxis_rangeslider_visible=False, height=500, margin=dict(l=10, r=10, t=40, b=10), hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                st.plotly_chart(fig, use_container_width=True)
-
-                pivot_box = f"""<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                if not df_daily.empty:
+                    prev_day = df_daily.iloc[-2]
+                    pivot = (prev_day['High'] + prev_day['Low'] + prev_day['Close']) / 3
+                    r1 = (pivot * 2) - prev_day['Low']; s1 = (pivot * 2) - prev_day['High']
+                    r2 = pivot + (prev_day['High'] - prev_day['Low']); s2 = pivot - (prev_day['High'] - prev_day['Low'])
+                    
+                    pivot_box = f"""<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
 <div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #f59e0b; color: #1e293b;">
 <div style="font-size: 11px; font-weight: bold;">📈 RESISTANCE 2</div><div style="font-size: 18px; font-weight: 800;">Rp {r2:,.0f}</div>
 </div>
@@ -651,7 +636,5 @@ def jalankan_teknikal():
 <div style="font-size: 11px; font-weight: bold;">✂️ SUPPORT 2</div><div style="font-size: 18px; font-weight: 800;">Rp {s2:,.0f}</div>
 </div>
 </div>"""
-                st.markdown(pivot_box, unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"Gagal membedah chart. Error: {e}")
+                    st.markdown(pivot_box, unsafe_allow_html=True)
+            except: pass
