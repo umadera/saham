@@ -66,6 +66,11 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
                 last_c = df.iloc[-1]; prev_c = df.iloc[-2]
                 cur_price = float(last_c['Close']); vwap_price = float(last_c['VWAP'])
                 
+                # Tambahan Data RSI & MACD
+                rsi_val = float(last_c['RSI'])
+                macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
+                rsi_stat = "🟢" if rsi_val < 30 else "🔴" if rsi_val > 70 else "🟡"
+
                 try:
                     dates = pd.Series(df.index.date).unique()
                     if len(dates) > 1: prev_close = df[df.index.date == dates[-2]]['Close'].iloc[-1]
@@ -79,8 +84,8 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
                 elif cur_price < last_c['MA5'] and last_c['MA5'] < last_c['MA20']: score -= 2
                     
                 if cur_price >= vwap_price: score += 1; alasan.append("Aman di atas VWAP")
-                if last_c['RSI'] < 30: score += 2; alasan.append("Oversold")
-                if last_c['MACD'] > last_c['Signal']: score += 1; alasan.append("MACD Bullish")
+                if rsi_val < 30: score += 2; alasan.append("Oversold")
+                if macd_stat == "Bullish": score += 1; alasan.append("MACD Bullish")
                 if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Lonjakan Volume")
                 
                 pola = detect_patterns(last_c, prev_c)
@@ -89,7 +94,7 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
                 support = df['Low'].tail(20).min()
                 
                 if score > 0: 
-                    hasil_instan.append({"Saham": ticker, "Harga": cur_price, "VWAP": vwap_price, "Support": support, "Score": score, "Alasan": " + ".join(alasan) if alasan else "Momentum Netral", "Pct_Change": pct_change})
+                    hasil_instan.append({"Saham": ticker, "Harga": cur_price, "VWAP": vwap_price, "Support": support, "Score": score, "Alasan": " + ".join(alasan) if alasan else "Momentum Netral", "Pct_Change": pct_change, "RSI_Val": rsi_val, "RSI_Stat": rsi_stat, "MACD_Stat": macd_stat})
         except: pass
     
     bar_instan.empty()
@@ -108,8 +113,8 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
             pct_sign = "+" if pct_val > 0 else ""
             pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
             
-            # 🟢 FIX HTML BOCOR (Rata Kiri Semua)
-            card_html = f"""<div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+            card_html = f"""<div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px;">
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
 <div style="min-width: 150px;">
 <div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
 <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI: <span style="color: #f59e0b; font-size: 14px;">{item['Score']}/10</span></div>
@@ -118,7 +123,13 @@ def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf,
 <div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Aksi Entry</div><div style="font-size: 16px; font-weight: 800; color: #22c55e;">{plan_entry}</div></div>
 <div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Target Jual</div><div style="font-size: 16px; font-weight: 800; color: #3b82f6;">{target:,.0f}</div></div>
 <div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Titik Cutloss</div><div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f}</div></div>
-<div style="width: 100%; font-size: 13px; color: #475569; background: #f8fafc; padding: 10px 15px; border-radius: 6px; margin-top: 5px; border: 1px solid #f1f5f9;">🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']} &nbsp;|&nbsp; <b>VWAP Intraday:</b> Rp {item['VWAP']:,.0f}</div>
+</div>
+<div style="display: flex; justify-content: space-around; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 VWAP Intraday</div><div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['VWAP']:,.0f}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div></div>
+<div style="text-align: center;"><div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD Trend</div><div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div></div>
+</div>
+<div style="width: 100%; font-size: 13px; color: #475569;">🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']}</div>
 </div>"""
             st.markdown(card_html, unsafe_allow_html=True)
     else:
@@ -152,6 +163,11 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
                 last_c = df.iloc[-1]; prev_c = df.iloc[-2]
                 cur_price = float(last_c['Close'])
                 
+                # Tambahan Data RSI & MACD
+                rsi_val = float(last_c['RSI'])
+                macd_stat = "Bullish" if float(last_c['MACD']) > float(last_c['Signal']) else "Bearish"
+                rsi_stat = "🟢" if rsi_val < 40 else "🔴" if rsi_val > 70 else "🟡"
+                
                 try:
                     prev_close = float(prev_c['Close'])
                     pct_change = ((cur_price - prev_close) / prev_close) * 100
@@ -161,8 +177,8 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
                 if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: score += 2; alasan.append("Strong Daily Trend")
                 elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: score += 3; alasan.append("Fresh Golden Cross")
                     
-                if last_c['RSI'] < 40: score += 2; alasan.append("Area Bawah (Aman)")
-                if last_c['MACD'] > last_c['Signal']: score += 1; alasan.append("MACD Bullish")
+                if rsi_val < 40: score += 2; alasan.append("Area Bawah (Aman)")
+                if macd_stat == "Bullish": score += 1; alasan.append("MACD Bullish")
                 if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Akumulasi Volume Besar")
                 
                 pola = detect_patterns(last_c, prev_c)
@@ -193,7 +209,7 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
                         "High": high_range, "Low": low_range, 
                         "Bandar_Avg": vwap_range, "Aman": harga_aman,
                         "Score": score, "Alasan": " + ".join(alasan) if alasan else "Konsolidasi", 
-                        "Pct_Change": pct_change
+                        "Pct_Change": pct_change, "RSI_Val": rsi_val, "RSI_Stat": rsi_stat, "MACD_Stat": macd_stat
                     })
         except: pass
     
@@ -215,7 +231,6 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
             pct_sign = "+" if pct_val > 0 else ""
             pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
             
-            # 🟢 FIX HTML BOCOR (Rata Kiri Semua, Hilangkan Spasi Indentasi)
             card_html_eod = f"""<div style="background: white; border-left: 5px solid #8b5cf6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px;">
 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
 <div style="min-width: 150px;">
@@ -241,20 +256,28 @@ def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_
 </div>
 <div style="display: flex; justify-content: space-around; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
 <div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar (VWAP)</div>
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar</div>
 <div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['Bandar_Avg']:,.0f}</div>
 </div>
 <div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 Harga Tertinggi</div>
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 High</div>
 <div style="font-size: 14px; font-weight: 800; color: #10b981;">Rp {item['High']:,.0f}</div>
 </div>
 <div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Harga Terendah</div>
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Low</div>
 <div style="font-size: 14px; font-weight: 800; color: #ef4444;">Rp {item['Low']:,.0f}</div>
 </div>
 <div style="text-align: center;">
-<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Harga Beli Aman</div>
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Beli Aman</div>
 <div style="font-size: 14px; font-weight: 800; color: #3b82f6;">Rp {item['Aman']:,.0f}</div>
+</div>
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🎛️ RSI (14)</div>
+<div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['RSI_Val']:.1f} {item['RSI_Stat']}</div>
+</div>
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 MACD</div>
+<div style="font-size: 14px; font-weight: 800; color: #1e293b;">{item['MACD_Stat']}</div>
 </div>
 </div>
 <div style="width: 100%; font-size: 13px; color: #475569;">🌙 <b>Kekuatan Harian:</b> {item['Alasan']}</div>
