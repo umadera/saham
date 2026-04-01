@@ -125,7 +125,7 @@ if 'multi_screener_data' not in st.session_state:
     st.session_state['multi_screener_data'] = None
 
 # ==============================================================================
-# 📊 MEMBUAT SIDEBAR MENU KEMBALI NORMAL
+# 📊 MEMBUAT SIDEBAR MENU
 # ==============================================================================
 st.sidebar.title("Menu Navigasi")
 pilihan_menu = st.sidebar.radio(
@@ -736,7 +736,7 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
             df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal']
             
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
-            df_sell['Total Lot'] = df_sell['Net Lot'].abs()
+            df_sell['Net Lot'] = df_sell['Net Lot'].abs() # INI YANG DIPERBAIKI (TIDAK BIKIN KOLOM BARU)
             df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual']
 
             col_tabel1, col_tabel2 = st.columns(2)
