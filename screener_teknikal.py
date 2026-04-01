@@ -45,16 +45,15 @@ def detect_patterns(curr, prev):
     elif is_doji: return "⚖️ Doji"
     else: return "-"
 
-# 🟢 FUNGSI KHUSUS UNTUK MESIN COPET KILAT (Kini Mendukung Berbagai Timeframe)
-def jalankan_mesin_copet(nama_sektor, daftar_ticker, tf_label, interval_yf, period_yf):
-    st.markdown(f"#### 🔍 Memindai Peluang di: **{nama_sektor}** (TF {tf_label})")
+# 🟢 FUNGSI 1: MESIN COPET LIVE (INTRADAY)
+def jalankan_mesin_copet_live(nama_sektor, daftar_ticker, tf_label, interval_yf, period_yf):
+    st.markdown(f"#### 🔍 Memindai Peluang Live di: **{nama_sektor}** (TF {tf_label})")
     bar_instan = st.progress(0, text="Mengumpulkan data Market Real-Time...")
     hasil_instan = []
 
     for i, ticker in enumerate(daftar_ticker):
         bar_instan.progress((i) / len(daftar_ticker), text=f"Menganalisa momentum {ticker}...")
         try:
-            # Menggunakan Timeframe & Periode Dinamis
             df = yf.Ticker(f"{ticker}.JK").history(period=period_yf, interval=interval_yf)
             if not df.empty and len(df) > 25:
                 df['RSI'] = calculate_rsi(df)
@@ -64,35 +63,23 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker, tf_label, interval_yf, peri
                 df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
                 df['VWAP'] = calculate_vwap(df)
 
-                last_c = df.iloc[-1]
-                prev_c = df.iloc[-2]
-                cur_price = float(last_c['Close'])
-                vwap_price = float(last_c['VWAP'])
+                last_c = df.iloc[-1]; prev_c = df.iloc[-2]
+                cur_price = float(last_c['Close']); vwap_price = float(last_c['VWAP'])
                 
-                # Kalkulasi Persentase Kenaikan
                 try:
                     dates = pd.Series(df.index.date).unique()
-                    if len(dates) > 1:
-                        prev_date = dates[-2]
-                        prev_close = df[df.index.date == prev_date]['Close'].iloc[-1]
-                    else:
-                        prev_close = df['Open'].iloc[0]
+                    if len(dates) > 1: prev_close = df[df.index.date == dates[-2]]['Close'].iloc[-1]
+                    else: prev_close = df['Open'].iloc[0]
                     pct_change = ((cur_price - prev_close) / prev_close) * 100
-                except:
-                    pct_change = 0.0
+                except: pct_change = 0.0
 
-                score = 0
-                alasan = []
-
-                if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: 
-                    score += 2; alasan.append("Uptrend")
-                elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: 
-                    score += 3; alasan.append("Golden Cross")
-                elif cur_price < last_c['MA5'] and last_c['MA5'] < last_c['MA20']: 
-                    score -= 2
+                score = 0; alasan = []
+                if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: score += 2; alasan.append("Uptrend")
+                elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: score += 3; alasan.append("Golden Cross")
+                elif cur_price < last_c['MA5'] and last_c['MA5'] < last_c['MA20']: score -= 2
                     
                 if cur_price >= vwap_price: score += 1; alasan.append("Aman di atas VWAP")
-                if last_c['RSI'] < 30: score += 2; alasan.append("Oversold (Murah)")
+                if last_c['RSI'] < 30: score += 2; alasan.append("Oversold")
                 if last_c['MACD'] > last_c['Signal']: score += 1; alasan.append("MACD Bullish")
                 if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Lonjakan Volume")
                 
@@ -102,65 +89,179 @@ def jalankan_mesin_copet(nama_sektor, daftar_ticker, tf_label, interval_yf, peri
                 support = df['Low'].tail(20).min()
                 
                 if score > 0: 
-                    hasil_instan.append({
-                        "Saham": ticker, "Harga": cur_price, "VWAP": vwap_price,
-                        "Support": support, "Score": score,
-                        "Alasan": " + ".join(alasan) if alasan else "Momentum Netral",
-                        "Pct_Change": pct_change
-                    })
-        except Exception as e:
-            pass
+                    hasil_instan.append({"Saham": ticker, "Harga": cur_price, "VWAP": vwap_price, "Support": support, "Score": score, "Alasan": " + ".join(alasan) if alasan else "Momentum Netral", "Pct_Change": pct_change})
+        except: pass
     
     bar_instan.empty()
 
     if hasil_instan:
         hasil_instan.sort(key=lambda x: x['Score'], reverse=True)
         top_5 = hasil_instan[:5]
-        
-        st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik:**")
+        st.success(f"✅ **Ditemukan {len(top_5)} Saham Copet Terbaik (Live):**")
         
         for rank, item in enumerate(top_5):
             plan_entry = f"HAKA" if item['Harga'] > item['VWAP'] else "BOW (Pantulan)"
-            cutloss = item['Support'] * 0.98
-            target = item['Harga'] * 1.03
-            
+            cutloss = item['Support'] * 0.98; target = item['Harga'] * 1.03
             pct_val = item['Pct_Change']
             pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
             pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
             pct_sign = "+" if pct_val > 0 else ""
-            
             pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
             
-            card_html = f"""
-            <div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-                <div style="min-width: 150px;">
-                    <div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
-                    <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI: <span style="color: #f59e0b; font-size: 14px;">{item['Score']}/10</span></div>
-                </div>
-                <div style="text-align: center; min-width: 80px;">
-                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Harga</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div>
-                </div>
-                <div style="text-align: center; min-width: 80px;">
-                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Aksi Entry</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #22c55e;">{plan_entry}</div>
-                </div>
-                <div style="text-align: center; min-width: 80px;">
-                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Target Jual</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #3b82f6;">{target:,.0f}</div>
-                </div>
-                <div style="text-align: center; min-width: 80px;">
-                    <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Titik Cutloss</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f}</div>
-                </div>
-                <div style="width: 100%; font-size: 13px; color: #475569; background: #f8fafc; padding: 10px 15px; border-radius: 6px; margin-top: 5px; border: 1px solid #f1f5f9;">
-                    🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']} &nbsp;|&nbsp; <b>VWAP:</b> Rp {item['VWAP']:,.0f}
-                </div>
-            </div>
-            """
+            # 🟢 FIX HTML BOCOR (Rata Kiri Semua)
+            card_html = f"""<div style="background: white; border-left: 5px solid #3b82f6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+<div style="min-width: 150px;">
+<div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
+<div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI: <span style="color: #f59e0b; font-size: 14px;">{item['Score']}/10</span></div>
+</div>
+<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Harga</div><div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div></div>
+<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Aksi Entry</div><div style="font-size: 16px; font-weight: 800; color: #22c55e;">{plan_entry}</div></div>
+<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Target Jual</div><div style="font-size: 16px; font-weight: 800; color: #3b82f6;">{target:,.0f}</div></div>
+<div style="text-align: center; min-width: 80px;"><div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Titik Cutloss</div><div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f}</div></div>
+<div style="width: 100%; font-size: 13px; color: #475569; background: #f8fafc; padding: 10px 15px; border-radius: 6px; margin-top: 5px; border: 1px solid #f1f5f9;">🎯 <b>Sinyal Terdeteksi:</b> {item['Alasan']} &nbsp;|&nbsp; <b>VWAP Intraday:</b> Rp {item['VWAP']:,.0f}</div>
+</div>"""
             st.markdown(card_html, unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham di kategori ini yang memenuhi kriteria momentum pada TF {tf_label}.")
+        st.warning(f"⚠️ Market sedang lesu. Tidak ada saham momentum pada TF {tf_label} saat ini.")
+
+
+# 🟢 FUNGSI 2: MESIN PERSIAPAN BESOK DENGAN HARGA BANDAR & RENTANG
+def jalankan_mesin_eod_besok(nama_sektor, daftar_ticker, start_d, end_d, preset_label):
+    st.markdown(f"#### 🌙 Memindai Persiapan BSJP di: **{nama_sektor}** ({start_d.strftime('%d %b %Y')} - {end_d.strftime('%d %b %Y')})")
+    bar_eod = st.progress(0, text="Mengumpulkan data Harian (EOD)...")
+    hasil_eod = []
+
+    fetch_start = min(start_d, end_d - datetime.timedelta(days=90))
+    fetch_end = end_d + datetime.timedelta(days=1)
+
+    for i, ticker in enumerate(daftar_ticker):
+        bar_eod.progress((i) / len(daftar_ticker), text=f"Menganalisa pola harian {ticker}...")
+        try:
+            df = yf.Ticker(f"{ticker}.JK").history(start=fetch_start, end=fetch_end, interval="1d")
+            
+            if not df.empty:
+                df = df.loc[:end_d.strftime('%Y-%m-%d')]
+                
+            if not df.empty and len(df) > 25:
+                df['RSI'] = calculate_rsi(df)
+                df['MACD'], df['Signal'] = calculate_macd(df)
+                df['MA5'] = df['Close'].rolling(window=5).mean()
+                df['MA20'] = df['Close'].rolling(window=20).mean()
+                df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
+
+                last_c = df.iloc[-1]; prev_c = df.iloc[-2]
+                cur_price = float(last_c['Close'])
+                
+                try:
+                    prev_close = float(prev_c['Close'])
+                    pct_change = ((cur_price - prev_close) / prev_close) * 100
+                except: pct_change = 0.0
+
+                score = 0; alasan = []
+                if cur_price > last_c['MA5'] and last_c['MA5'] > last_c['MA20']: score += 2; alasan.append("Strong Daily Trend")
+                elif last_c['MA5'] > last_c['MA20'] and prev_c['MA5'] <= prev_c['MA20']: score += 3; alasan.append("Fresh Golden Cross")
+                    
+                if last_c['RSI'] < 40: score += 2; alasan.append("Area Bawah (Aman)")
+                if last_c['MACD'] > last_c['Signal']: score += 1; alasan.append("MACD Bullish")
+                if last_c['Volume'] > (last_c['Vol_MA5'] * 1.5): score += 2; alasan.append("Akumulasi Volume Besar")
+                
+                pola = detect_patterns(last_c, prev_c)
+                if pola != "-": score += 2; alasan.append(pola)
+
+                # LOGIKA HARGA BANDAR & AMAN BERDASARKAN RENTANG WAKTU
+                df_range = df.loc[start_d.strftime('%Y-%m-%d') : end_d.strftime('%Y-%m-%d')]
+                if not df_range.empty and len(df_range) > 1:
+                    high_range = df_range['High'].max()
+                    low_range = df_range['Low'].min()
+                    typical_p = (df_range['High'] + df_range['Low'] + df_range['Close']) / 3
+                    vwap_range = (typical_p * df_range['Volume']).sum() / df_range['Volume'].sum() if df_range['Volume'].sum() > 0 else cur_price
+                else:
+                    high_range = df['High'].tail(10).max()
+                    low_range = df['Low'].tail(10).min()
+                    typical_p = (df['High'].tail(10) + df['Low'].tail(10) + df['Close'].tail(10)) / 3
+                    vwap_range = (typical_p * df['Volume'].tail(10)).sum() / df['Volume'].tail(10).sum()
+                    
+                target_potensial = high_range
+                if target_potensial <= cur_price: target_potensial = cur_price * 1.05 
+                
+                harga_aman = (vwap_range + low_range) / 2
+                
+                if score > 0: 
+                    hasil_eod.append({
+                        "Saham": ticker, "Harga": cur_price, 
+                        "Support": low_range, "Target": target_potensial, 
+                        "High": high_range, "Low": low_range, 
+                        "Bandar_Avg": vwap_range, "Aman": harga_aman,
+                        "Score": score, "Alasan": " + ".join(alasan) if alasan else "Konsolidasi", 
+                        "Pct_Change": pct_change
+                    })
+        except: pass
+    
+    bar_eod.empty()
+
+    if hasil_eod:
+        hasil_eod.sort(key=lambda x: x['Score'], reverse=True)
+        top_5 = hasil_eod[:5]
+        st.success(f"💼 **Ditemukan {len(top_5)} Saham Terbaik untuk Setup BSJP / Besok Pagi:**")
+        
+        for rank, item in enumerate(top_5):
+            cutloss = item['Support'] * 0.98
+            potensi_cuan = ((item['Target'] - item['Harga']) / item['Harga']) * 100
+            risiko_loss = ((cutloss - item['Harga']) / item['Harga']) * 100
+
+            pct_val = item['Pct_Change']
+            pct_color = "#16a34a" if pct_val > 0 else "#dc2626" if pct_val < 0 else "#64748b"
+            pct_bg = "rgba(34, 197, 94, 0.12)" if pct_val > 0 else "rgba(239, 68, 68, 0.12)" if pct_val < 0 else "rgba(100, 116, 139, 0.12)"
+            pct_sign = "+" if pct_val > 0 else ""
+            pct_badge = f"<span style='color: {pct_color}; background-color: {pct_bg}; font-size: 14px; padding: 4px 10px; border-radius: 6px; margin-left: 12px; font-weight: 800; display: inline-block; transform: translateY(-2px);'>{pct_sign}{pct_val:.1f}%</span>"
+            
+            # 🟢 FIX HTML BOCOR (Rata Kiri Semua, Hilangkan Spasi Indentasi)
+            card_html_eod = f"""<div style="background: white; border-left: 5px solid #8b5cf6; padding: 15px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px;">
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+<div style="min-width: 150px;">
+<div style="font-size: 20px; font-weight: 900; color: #0f172a;">#{rank+1} &nbsp;{item['Saham']} {pct_badge}</div>
+<div style="font-size: 12px; color: #64748b; font-weight: bold; margin-top: 5px;">Skor AI EOD: <span style="color: #8b5cf6; font-size: 14px;">{item['Score']}/10</span></div>
+</div>
+<div style="text-align: center; min-width: 80px;">
+<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Harga Penutupan</div>
+<div style="font-size: 16px; font-weight: 800; color: #1e293b;">{item['Harga']:,.0f}</div>
+</div>
+<div style="text-align: center; min-width: 80px;">
+<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Rencana Masuk</div>
+<div style="font-size: 16px; font-weight: 800; color: #8b5cf6;">Sore / Pagi Awal</div>
+</div>
+<div style="text-align: center; min-width: 80px;">
+<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Target Jual ({preset_label})</div>
+<div style="font-size: 16px; font-weight: 800; color: #10b981;">{item['Target']:,.0f} <span style="font-size:12px; color:#10b981;">(+{potensi_cuan:.1f}%)</span></div>
+</div>
+<div style="text-align: center; min-width: 80px;">
+<div style="font-size: 11px; color: #94a3b8; font-weight: bold;">Batas Cutloss</div>
+<div style="font-size: 16px; font-weight: 800; color: #ef4444;">{cutloss:,.0f} <span style="font-size:12px; color:#ef4444;">({risiko_loss:.1f}%)</span></div>
+</div>
+</div>
+<div style="display: flex; justify-content: space-around; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; flex-wrap: wrap; gap: 10px;">
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📊 Rata-Rata Bandar (VWAP)</div>
+<div style="font-size: 14px; font-weight: 800; color: #8b5cf6;">Rp {item['Bandar_Avg']:,.0f}</div>
+</div>
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📈 Harga Tertinggi</div>
+<div style="font-size: 14px; font-weight: 800; color: #10b981;">Rp {item['High']:,.0f}</div>
+</div>
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">📉 Harga Terendah</div>
+<div style="font-size: 14px; font-weight: 800; color: #ef4444;">Rp {item['Low']:,.0f}</div>
+</div>
+<div style="text-align: center;">
+<div style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">🛡️ Harga Beli Aman</div>
+<div style="font-size: 14px; font-weight: 800; color: #3b82f6;">Rp {item['Aman']:,.0f}</div>
+</div>
+</div>
+<div style="width: 100%; font-size: 13px; color: #475569;">🌙 <b>Kekuatan Harian:</b> {item['Alasan']}</div>
+</div>"""
+            st.markdown(card_html_eod, unsafe_allow_html=True)
+    else:
+        st.warning(f"⚠️ Pada rentang waktu tersebut, tidak ada setup formasi yang bagus untuk saham-saham di kategori ini.")
 
 
 # --- FUNGSI UTAMA HALAMAN TEKNIKAL ---
@@ -182,20 +283,25 @@ def jalankan_teknikal():
 
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 25px 30px; border-radius: 12px; border-left: 8px solid #f59e0b; margin-bottom: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.2);">
-        <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V3.0 ⚡</h2>
-        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Gunakan Tab <b>Top 5 Copet Kilat</b> untuk mencari sinyal instan dari saham favorit atau sektor pilihan Anda!</p>
+        <h2 style="color: #ffffff; margin: 0; font-weight: 800; letter-spacing: 0.5px;">⏱️ Radar Teknikal Pro V4.0 ⚡</h2>
+        <p style="color: #94a3b8; margin-top: 8px; font-size: 15px; margin-bottom: 0;">Gunakan Tab <b>Live</b> untuk copet jam bursa, dan Tab <b>Persiapan Besok</b> untuk riset santai malam hari!</p>
     </div>
     """, unsafe_allow_html=True)
 
-    tab_instan, tab_massal, tab_single = st.tabs(["🚀 Top 5 Copet Kilat (Instan)", "⚙️ Mass Screener (Advance)", "🔍 Bedah Chart Tunggal"])
+    tab_live, tab_eod, tab_massal, tab_single = st.tabs([
+        "🚀 Top 5 Copet (Live)", 
+        "📅 Persiapan Besok (EOD)", 
+        "⚙️ Mass Screener", 
+        "🔍 Bedah Chart"
+    ])
 
     # ==============================================================================
-    # TAB 1: TOP 5 COPET KILAT (PANEL KONTROL DENGAN TIMEFRAME)
+    # TAB 1: TOP 5 COPET KILAT (LIVE INTRADAY)
     # ==============================================================================
-    with tab_instan:
+    with tab_live:
         col_title, col_manage = st.columns([4, 1.5])
         with col_title:
-            st.markdown("### 🎯 Mesin Copet Instan")
+            st.markdown("### 🎯 Mesin Copet Live Market")
         with col_manage:
             with st.expander("⚙️ Kelola Kategori"):
                 st.markdown("#### ➕ Tambah")
@@ -205,7 +311,6 @@ def jalankan_teknikal():
                     if new_sec_name and new_sec_stocks:
                         st.session_state['db_sektor'][new_sec_name] = [s.strip().upper() for s in new_sec_stocks.split(",")]
                         st.rerun()
-                
                 st.markdown("---")
                 st.markdown("#### 🗑️ Hapus")
                 sektor_to_delete = st.selectbox("Pilih Kategori:", list(st.session_state['db_sektor'].keys()))
@@ -214,30 +319,15 @@ def jalankan_teknikal():
                         del st.session_state['db_sektor'][sektor_to_delete]
                         st.rerun()
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        
         opsi_kategori = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
-        opsi_tf = ["1 Menit", "5 Menit", "30 Menit", "1 Jam"]
-        
-        # Mapping Timeframe ke Format yfinance (Interval, Period)
-        tf_map_copet = {
-            "1 Menit": ("1m", "5d"),
-            "5 Menit": ("5m", "5d"),
-            "30 Menit": ("30m", "1mo"),
-            "1 Jam": ("60m", "1mo")
-        }
+        opsi_tf = ["1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam"]
+        tf_map_copet = {"1 Menit": ("1m", "5d"), "5 Menit": ("5m", "5d"), "15 Menit": ("15m", "1mo"), "30 Menit": ("30m", "1mo"), "1 Jam": ("60m", "1mo")}
         
         st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
         col_sel, col_tf, col_btn = st.columns([2, 1, 1.5])
-        
-        with col_sel:
-            pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
-        with col_tf:
-            # 🟢 Dropdown Timeframe Baru (Default 5 Menit)
-            tf_pilihan_copet = st.selectbox("Timeframe:", opsi_tf, index=1, label_visibility="collapsed")
-        with col_btn:
-            eksekusi_copet = st.button("⚡ SCAN SEKARANG", type="primary", use_container_width=True)
-            
+        with col_sel: pilihan_kategori = st.selectbox("Pilih Kategori:", opsi_kategori, label_visibility="collapsed")
+        with col_tf: tf_pilihan_copet = st.selectbox("Timeframe:", opsi_tf, index=1, label_visibility="collapsed")
+        with col_btn: eksekusi_copet = st.button("⚡ SCAN LIVE", type="primary", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
         
         if eksekusi_copet:
@@ -246,17 +336,89 @@ def jalankan_teknikal():
             if pilihan_kategori == "⭐ Watchlist Favorit Saya":
                 default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
                 tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
-                if not tickers:
-                    st.error("Watchlist Anda kosong! Silakan isi di tab 'Mass Screener'.")
-                else:
-                    jalankan_mesin_copet("Watchlist Favorit Pribadi", tickers, tf_pilihan_copet, interval_yf, period_yf)
+                if tickers: jalankan_mesin_copet_live("Watchlist Favorit Pribadi", tickers, tf_pilihan_copet, interval_yf, period_yf)
             else:
                 tickers = st.session_state['db_sektor'][pilihan_kategori]
-                jalankan_mesin_copet(pilihan_kategori, tickers, tf_pilihan_copet, interval_yf, period_yf)
+                jalankan_mesin_copet_live(pilihan_kategori, tickers, tf_pilihan_copet, interval_yf, period_yf)
 
 
     # ==============================================================================
-    # TAB 2: MASS SCREENER ADVANCE
+    # TAB 2: PERSIAPAN BESOK (EOD SCANNER RENTANG TANGGAL)
+    # ==============================================================================
+    with tab_eod:
+        st.markdown("### 🌙 Radar Persiapan BSJP (End of Day)")
+        st.write("Mencari titik Support terendah dan Target tertinggi berdasarkan rentang waktu. Sangat cocok digunakan saat market tutup.")
+        
+        opsi_kategori_eod = ["⭐ Watchlist Favorit Saya"] + list(st.session_state['db_sektor'].keys())
+        
+        st.markdown("<div style='font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 5px;'>Pilih Rentang Waktu Cepat (Otomatis mengubah Target Harga):</div>", unsafe_allow_html=True)
+        preset_eod = st.radio(
+            "Pilih Rentang Waktu Cepat:",
+            ["Custom", "1 Hari", "1 Minggu", "1 Bulan", "3 Bulan", "6 Bulan", "1 Tahun"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        today = datetime.date.today()
+        if preset_eod == "1 Hari":
+            default_start = today - datetime.timedelta(days=1)
+            default_end = today
+        elif preset_eod == "1 Minggu":
+            default_start = today - datetime.timedelta(weeks=1)
+            default_end = today
+        elif preset_eod == "1 Bulan":
+            default_start = today - datetime.timedelta(days=30)
+            default_end = today
+        elif preset_eod == "3 Bulan":
+            default_start = today - datetime.timedelta(days=90)
+            default_end = today
+        elif preset_eod == "6 Bulan":
+            default_start = today - datetime.timedelta(days=180)
+            default_end = today
+        elif preset_eod == "1 Tahun":
+            default_start = today - datetime.timedelta(days=365)
+            default_end = today
+        else: # Custom
+            default_start = today - datetime.timedelta(days=14)
+            default_end = today
+        
+        st.markdown("<div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px; border-left: 5px solid #8b5cf6;'>", unsafe_allow_html=True)
+        col_sel_eod, col_date_eod, col_btn_eod = st.columns([2, 2, 1.5])
+        
+        with col_sel_eod:
+            pilihan_kategori_eod = st.selectbox("Pilih Kategori (EOD):", opsi_kategori_eod, label_visibility="collapsed")
+        with col_date_eod:
+            tanggal_eod = st.date_input(
+                "Rentang Tanggal:", 
+                value=(default_start, default_end), 
+                max_value=today, 
+                label_visibility="collapsed"
+            )
+        with col_btn_eod:
+            eksekusi_eod = st.button("💼 SCAN DATA HARIAN", type="primary", use_container_width=True)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        if eksekusi_eod:
+            st.markdown("---")
+            if isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 2:
+                start_d, end_d = tanggal_eod
+            elif isinstance(tanggal_eod, tuple) and len(tanggal_eod) == 1:
+                start_d = end_d = tanggal_eod[0]
+            else:
+                start_d = end_d = tanggal_eod
+
+            if pilihan_kategori_eod == "⭐ Watchlist Favorit Saya":
+                default_wl = st.session_state.get('watchlist', "BREN, CUAN, BRPT, AMMN, GOTO, BBCA, BMRI, TLKM, ASII, PGAS")
+                tickers = [t.strip().upper() for t in default_wl.split(',') if t.strip()]
+                if tickers: jalankan_mesin_eod_besok("Watchlist Favorit Pribadi", tickers, start_d, end_d, preset_eod)
+            else:
+                tickers = st.session_state['db_sektor'][pilihan_kategori_eod]
+                jalankan_mesin_eod_besok(pilihan_kategori_eod, tickers, start_d, end_d, preset_eod)
+
+
+    # ==============================================================================
+    # TAB 3: MASS SCREENER ADVANCE
     # ==============================================================================
     with tab_massal:
         st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
@@ -393,7 +555,7 @@ def jalankan_teknikal():
 
 
     # ==============================================================================
-    # TAB 3: BEDAH CHART TUNGGAL
+    # TAB 4: BEDAH CHART TUNGGAL
     # ==============================================================================
     with tab_single:
         st.markdown("<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
@@ -436,7 +598,6 @@ def jalankan_teknikal():
                 
                 my_bar.empty()
 
-                # --- GRAFIK CANDLESTICK + VWAP (PLOTLY) ---
                 df_plot = df_chart.tail(90).reset_index() 
                 if 'index' in df_plot.columns: df_plot.rename(columns={'index': 'Date'}, inplace=True)
                 if 'Datetime' in df_plot.columns: df_plot.rename(columns={'Datetime': 'Date'}, inplace=True)
@@ -450,7 +611,6 @@ def jalankan_teknikal():
                 fig.update_layout(title=dict(text=f"Chart {single_ticker} (TF: {single_tf})", font=dict(size=14)), yaxis_title="Harga (Rp)", xaxis_title="", template="plotly_white", xaxis_rangeslider_visible=False, height=500, margin=dict(l=10, r=10, t=40, b=10), hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
                 st.plotly_chart(fig, use_container_width=True)
 
-                # --- PIVOT BOX ---
                 pivot_box = f"""<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
 <div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #f59e0b; color: #1e293b;">
 <div style="font-size: 11px; font-weight: bold;">📈 RESISTANCE 2</div><div style="font-size: 18px; font-weight: 800;">Rp {r2:,.0f}</div>
