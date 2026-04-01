@@ -480,7 +480,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
 
                         url_trend = f"https://api.invezgo.com/analysis/inventory-chart/stock/{emiten_input}"
                         params_trend = {
-                            # 🚀 BUG FIX: MENGGUNAKAN SCOPE 'NET' AGAR BISA TERLIHAT STATUS MINUSNYA
                             "from": start_date.strftime("%Y-%m-%d"),
                             "to": end_date.strftime("%Y-%m-%d"),
                             "scope": "net",
@@ -799,6 +798,96 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
 
 
             # =====================================================================
+            # 🚀 BAR CHARTS (TOP 5 BELI JUAL)
+            # =====================================================================
+            st.write("---")
+            col_chart1, col_chart2 = st.columns(2)
+            
+            df_aku_chart = df_akumulasi_top5.copy()
+            if not df_aku_chart.empty:
+                df_aku_chart['Broker_Label'] = df_aku_chart['Broker'] + " (" + df_aku_chart['Tipe'] + ")"
+                df_aku_chart['Label_Val'] = df_aku_chart['Net Value'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
+                df_aku_chart['Label_Lot'] = df_aku_chart['Net Lot'].apply(format_lot)
+
+            df_dis_chart = df_distribusi_top5.copy()
+            if not df_dis_chart.empty:
+                df_dis_chart['Broker_Label'] = df_dis_chart['Broker'] + " (" + df_dis_chart['Tipe'] + ")"
+                df_dis_chart['Label_Val'] = df_dis_chart['Net Value Abs'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
+                df_dis_chart['Label_Lot'] = df_dis_chart['Net Lot'].apply(format_lot)
+
+            with col_chart1:
+                st.markdown("<h4 style='text-align: center;'>🟢 5 Besar Bandar Paling Rakus (Beli)</h4>", unsafe_allow_html=True)
+                if not df_aku_chart.empty:
+                    max_val_buy = float(df_aku_chart['Net Value'].max())
+                    
+                    base_buy = alt.Chart(df_aku_chart).encode(
+                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
+                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
+                    )
+                    bar_buy = base_buy.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                        y=alt.Y('Net Value:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_buy * 1.15])),
+                        color=alt.Color('Warna:N', scale=None)
+                    )
+                    text_val_buy = base_buy.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
+                        y=alt.Y('Net Value:Q'),
+                        text='Label_Val:N'
+                    )
+                    text_lot_buy = base_buy.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
+                        y=alt.Y('Net Value:Q'),
+                        text='Label_Lot:N'
+                    )
+                    chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=380)
+                    st.altair_chart(chart_buy, use_container_width=True)
+
+                    st.markdown(f"""
+                    <div style="background: rgba(46, 204, 113, 0.08); border-top: 3px solid #2ecc71; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Masuk (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #2ecc71;">{format_rupiah(total_akumulasi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #2ecc71; padding: 2px 8px; border-radius: 12px;">{pct_buy_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("Tidak ada data Net Buy.")
+
+            with col_chart2:
+                st.markdown("<h4 style='text-align: center;'>🔴 5 Besar Bandar Buang Barang (Jual)</h4>", unsafe_allow_html=True)
+                if not df_dis_chart.empty:
+                    max_val_sell = float(df_dis_chart['Net Value Abs'].max())
+                    
+                    base_sell = alt.Chart(df_dis_chart).encode(
+                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
+                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value Abs:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
+                    )
+                    bar_sell = base_sell.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                        y=alt.Y('Net Value Abs:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_sell * 1.15])),
+                        color=alt.Color('Warna:N', scale=None)
+                    )
+                    text_val_sell = base_sell.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
+                        y=alt.Y('Net Value Abs:Q'),
+                        text='Label_Val:N'
+                    )
+                    text_lot_sell = base_sell.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
+                        y=alt.Y('Net Value Abs:Q'),
+                        text='Label_Lot:N'
+                    )
+                    chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=380)
+                    st.altair_chart(chart_sell, use_container_width=True)
+
+                    st.markdown(f"""
+                    <div style="background: rgba(231, 76, 60, 0.08); border-top: 3px solid #e74c3c; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Keluar (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #e74c3c;">{format_rupiah(total_distribusi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #e74c3c; padding: 2px 8px; border-radius: 12px;">{pct_sell_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("Tidak ada data Net Sell.")
+
+            # =====================================================================
             # 🚀 UI PENCARIAN BROKER DAN JARUM KECEPATAN (DIRAMPINGKAN & BERSEBELAHAN)
             # =====================================================================
             st.markdown("""
@@ -948,96 +1037,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.info(f"Tidak ada rekam jejak untuk broker {broker_pilihan} pada rentang tanggal ini.")
             # =====================================================================
 
-
-            # =====================================================================
-            # 🚀 BAR CHARTS
-            # =====================================================================
-            st.write("---")
-            col_chart1, col_chart2 = st.columns(2)
-            
-            df_aku_chart = df_akumulasi_top5.copy()
-            if not df_aku_chart.empty:
-                df_aku_chart['Broker_Label'] = df_aku_chart['Broker'] + " (" + df_aku_chart['Tipe'] + ")"
-                df_aku_chart['Label_Val'] = df_aku_chart['Net Value'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
-                df_aku_chart['Label_Lot'] = df_aku_chart['Net Lot'].apply(format_lot)
-
-            df_dis_chart = df_distribusi_top5.copy()
-            if not df_dis_chart.empty:
-                df_dis_chart['Broker_Label'] = df_dis_chart['Broker'] + " (" + df_dis_chart['Tipe'] + ")"
-                df_dis_chart['Label_Val'] = df_dis_chart['Net Value Abs'].apply(lambda x: format_rupiah(x).replace('Rp ', ''))
-                df_dis_chart['Label_Lot'] = df_dis_chart['Net Lot'].apply(format_lot)
-
-            with col_chart1:
-                st.markdown("<h4 style='text-align: center;'>🟢 5 Besar Bandar Paling Rakus (Beli)</h4>", unsafe_allow_html=True)
-                if not df_aku_chart.empty:
-                    max_val_buy = float(df_aku_chart['Net Value'].max())
-                    
-                    base_buy = alt.Chart(df_aku_chart).encode(
-                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
-                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
-                    )
-                    bar_buy = base_buy.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                        y=alt.Y('Net Value:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_buy * 1.15])),
-                        color=alt.Color('Warna:N', scale=None)
-                    )
-                    text_val_buy = base_buy.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
-                        y=alt.Y('Net Value:Q'),
-                        text='Label_Val:N'
-                    )
-                    text_lot_buy = base_buy.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
-                        y=alt.Y('Net Value:Q'),
-                        text='Label_Lot:N'
-                    )
-                    chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=380)
-                    st.altair_chart(chart_buy, use_container_width=True)
-
-                    st.markdown(f"""
-                    <div style="background: rgba(46, 204, 113, 0.08); border-top: 3px solid #2ecc71; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
-                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Masuk (Top 5)</div>
-                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
-                            <span style="font-size: 18px; font-weight: 900; color: #2ecc71;">{format_rupiah(total_akumulasi)}</span>
-                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #2ecc71; padding: 2px 8px; border-radius: 12px;">{pct_buy_top5:.1f}%</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.info("Tidak ada data Net Buy.")
-
-            with col_chart2:
-                st.markdown("<h4 style='text-align: center;'>🔴 5 Besar Bandar Buang Barang (Jual)</h4>", unsafe_allow_html=True)
-                if not df_dis_chart.empty:
-                    max_val_sell = float(df_dis_chart['Net Value Abs'].max())
-                    
-                    base_sell = alt.Chart(df_dis_chart).encode(
-                        x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
-                        tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value Abs:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
-                    )
-                    bar_sell = base_sell.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                        y=alt.Y('Net Value Abs:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_sell * 1.15])),
-                        color=alt.Color('Warna:N', scale=None)
-                    )
-                    text_val_sell = base_sell.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
-                        y=alt.Y('Net Value Abs:Q'),
-                        text='Label_Val:N'
-                    )
-                    text_lot_sell = base_sell.mark_text(dy=-5, fontWeight=600, fontSize=10, color='#888888').encode(
-                        y=alt.Y('Net Value Abs:Q'),
-                        text='Label_Lot:N'
-                    )
-                    chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=380)
-                    st.altair_chart(chart_sell, use_container_width=True)
-
-                    st.markdown(f"""
-                    <div style="background: rgba(231, 76, 60, 0.08); border-top: 3px solid #e74c3c; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
-                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Keluar (Top 5)</div>
-                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
-                            <span style="font-size: 18px; font-weight: 900; color: #e74c3c;">{format_rupiah(total_distribusi)}</span>
-                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #e74c3c; padding: 2px 8px; border-radius: 12px;">{pct_sell_top5:.1f}%</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.info("Tidak ada data Net Sell.")
 
             st.write("---")
             st.markdown("### 🥧 Peta Kekuatan: Siapa Yang Paling Banyak Transaksi?")
