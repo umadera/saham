@@ -702,6 +702,17 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     )
                     chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=350)
                     st.altair_chart(chart_buy, use_container_width=True)
+
+                    # INI BLOK KODE YANG SEMPAT HILANG (DIKEMBALIKAN)
+                    st.markdown(f"""
+                    <div style="background: rgba(46, 204, 113, 0.08); border-top: 3px solid #2ecc71; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Masuk (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #2ecc71;">{format_rupiah(total_akumulasi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #2ecc71; padding: 2px 8px; border-radius: 12px;">{pct_buy_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info("Tidak ada data yang beli.")
 
@@ -726,6 +737,17 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     )
                     chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=350)
                     st.altair_chart(chart_sell, use_container_width=True)
+
+                    # INI BLOK KODE YANG SEMPAT HILANG (DIKEMBALIKAN)
+                    st.markdown(f"""
+                    <div style="background: rgba(231, 76, 60, 0.08); border-top: 3px solid #e74c3c; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Keluar (Top 5)</div>
+                        <div style="display: flex; justify-content: center; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 18px; font-weight: 900; color: #e74c3c;">{format_rupiah(total_distribusi)}</span>
+                            <span style="font-size: 12px; font-weight: 800; color: #ffffff; background: #e74c3c; padding: 2px 8px; border-radius: 12px;">{pct_sell_top5:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info("Tidak ada data yang jual.")
 
@@ -736,11 +758,7 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
             df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal']
             
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
-            
-            # --- INI DIA PENYAKITNYA! SAYA SUDAH PERBAIKI 1000% ---
             df_sell['Net Lot'] = df_sell['Net Lot'].abs() 
-            # -----------------------------------------------------
-            
             df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual']
 
             col_tabel1, col_tabel2 = st.columns(2)
