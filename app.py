@@ -762,13 +762,15 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             st.write("---")
 
             df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
+            df_buy['Cuan/Rugi (Rp)'] = ((current_price - df_buy['Buy Avg']) * df_buy['Net Lot'] * 100).fillna(0) if current_price > 0 else 0.0
             df_buy['Floating (%)'] = ((current_price - df_buy['Buy Avg']) / df_buy['Buy Avg'] * 100).fillna(0) if current_price > 0 else 0.0
-            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal', 'Floating (%)']
+            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal', 'Cuan/Rugi (Rp)', 'Floating (%)']
             
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
             df_sell['Net Lot'] = df_sell['Net Lot'].abs() 
+            df_sell['Jarak Nominal (Rp)'] = ((current_price - df_sell['Sell Avg']) * df_sell['Net Lot'] * 100).fillna(0) if current_price > 0 else 0.0
             df_sell['Jarak ke Harga Aktif (%)'] = ((current_price - df_sell['Sell Avg']) / df_sell['Sell Avg'] * 100).fillna(0) if current_price > 0 else 0.0
-            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual', 'Jarak ke Harga Aktif (%)']
+            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual', 'Jarak Nominal (Rp)', 'Jarak ke Harga Aktif (%)']
 
             def color_pct(val):
                 if pd.isna(val): return ''
@@ -782,17 +784,18 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                 st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 DAFTAR YANG MEMBELI SAHAM INI</h5>", unsafe_allow_html=True)
                 styler_buy = apply_styler_map(df_buy.style, style_warna_broker, subset=['Yang Beli'])
                 styler_buy = apply_styler_map(styler_buy, lambda x: 'color: #2ecc71; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal'])
-                styler_buy = apply_styler_map(styler_buy, color_pct, subset=['Floating (%)'])
-                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}', 'Floating (%)': '{:+.2f}%'})
+                styler_buy = apply_styler_map(styler_buy, color_pct, subset=['Cuan/Rugi (Rp)', 'Floating (%)'])
+                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}', 'Cuan/Rugi (Rp)': 'Rp {:+,.0f}', 'Floating (%)': '{:+.2f}%'})
                 st.dataframe(styler_buy, use_container_width=True, hide_index=True)
 
             with col_tabel2:
                 st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DAFTAR YANG MENJUAL SAHAM INI</h5>", unsafe_allow_html=True)
                 styler_sell = apply_styler_map(df_sell.style, style_warna_broker, subset=['Yang Jual'])
                 styler_sell = apply_styler_map(styler_sell, lambda x: 'color: #e74c3c; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual'])
-                styler_sell = apply_styler_map(styler_sell, color_pct, subset=['Jarak ke Harga Aktif (%)'])
-                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
+                styler_sell = apply_styler_map(styler_sell, color_pct, subset=['Jarak Nominal (Rp)', 'Jarak ke Harga Aktif (%)'])
+                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak Nominal (Rp)': 'Rp {:+,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
                 st.dataframe(styler_sell, use_container_width=True, hide_index=True)
+
 
             # =====================================================================
             # 🚀 UI PENCARIAN BROKER DAN JARUM KECEPATAN (DIRAMPINGKAN & BERSEBELAHAN)
@@ -888,7 +891,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     """
                     st.markdown(meter_html, unsafe_allow_html=True)
             # =====================================================================
-
 
             # =====================================================================
             # 🚀 RADAR HISTORI HARIAN PER BROKER
@@ -1092,54 +1094,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
                 else:
                     st.info("Tidak ada data yang jual")
-
-            if not df_trend.empty:
-                st.write("---")
-                st.markdown("### 📈 Riwayat Kekuatan Bandar Dari Hari ke Hari")
-                st.markdown("Grafik ini menunjukkan apakah Bandar (Top 5 Gabungan) terus menambah belanjaan tiap hari (hijau membesar), atau malah asyik jualan (merah membesar).")
-                
-                df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
-                df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-                df_trend['Pct_Dis'] = (df_trend['Distribusi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-
-                df_trend['Label_Aku'] = df_trend['Pct_Aku'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                df_trend['Label_Dis'] = df_trend['Pct_Dis'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                
-                df_melt = df_trend.melt(
-                    id_vars=['Date', 'Pct_Aku', 'Pct_Dis'], 
-                    value_vars=['Akumulasi (Top 5)', 'Distribusi (Top 5)'], 
-                    var_name='Kategori', 
-                    value_name='Nilai'
-                )
-                df_melt['Persentase (%)'] = df_melt.apply(lambda row: row['Pct_Aku'] if 'Akumulasi' in row['Kategori'] else row['Pct_Dis'], axis=1)
-                
-                color_scale_trend = alt.Scale(
-                    domain=['Akumulasi (Top 5)', 'Distribusi (Top 5)'],
-                    range=['#2ecc71', '#e74c3c'] 
-                )
-                
-                bars = alt.Chart(df_melt).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=25).encode(
-                    x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
-                    y=alt.Y('Nilai:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s')),
-                    color=alt.Color('Kategori:N', scale=color_scale_trend, legend=alt.Legend(title=None, orient='top')),
-                    tooltip=['Date', 'Kategori', alt.Tooltip('Nilai:Q', format=',.0f', title='Jumlah Uang (Rp)'), alt.Tooltip('Persentase (%):Q', format='.1f')]
-                )
-
-                text_aku = alt.Chart(df_trend).mark_text(dy=-12, color='#22c55e', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Akumulasi (Top 5):Q'),
-                    text=alt.Text('Label_Aku:N')
-                )
-
-                text_dis = alt.Chart(df_trend).mark_text(dy=12, color='#ef4444', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Distribusi (Top 5):Q'),
-                    text=alt.Text('Label_Dis:N')
-                )
-                
-                rule = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
-                
-                st.altair_chart(alt.layer(bars, text_aku, text_dis, rule).properties(height=380), use_container_width=True)
 
             st.write("---")
             st.markdown(f"## 🤖 Kesimpulan Robot Untuk Saham Ini: {emiten_res}")
