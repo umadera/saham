@@ -854,8 +854,12 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                 styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
                 st.dataframe(styler_sell, use_container_width=True, hide_index=True)
 
+
+            # =====================================================================
+            # 🚀 UI PENCARIAN BROKER DAN JARUM KECEPATAN (DIRAMPINGKAN & BERSEBELAHAN)
+            # =====================================================================
             st.markdown("""
-            <div style='text-align: center; font-size: 16px; margin-top: 10px; margin-bottom: 20px;'>
+            <div style='text-align: center; font-size: 14px; margin-top: 10px; margin-bottom: 25px;'>
                 <span style='color:#2ecc71; font-weight:bold;'>● Tidak Jelas (Zombie)</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
                 <span style='color:#9b59b6; font-weight:bold;'>● Orang Bule (Asing)</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
                 <span style='color:#e74c3c; font-weight:bold;'>● Investor Biasa (Ritel)</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
@@ -863,91 +867,93 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("#### 🔍 Cari Info Kode Broker")
-            col_search1, col_search2 = st.columns([1, 2])
+            col_search_speed1, col_search_speed2 = st.columns([1.2, 2])
             
-            with col_search1:
-                search_query = st.text_input("Ketik Kode / Nama Broker:", "", placeholder="Contoh: AK atau Mandiri").strip()
-            
-            if search_query:
-                df_semua_broker = pd.DataFrame(list(DARI_BROKER_NAMA_MAP.items()), columns=['Kode', 'Nama'])
-                df_filtered = df_semua_broker[
-                    df_semua_broker['Kode'].str.contains(search_query, case=False, na=False) | 
-                    df_semua_broker['Nama'].str.contains(search_query, case=False, na=False)
-                ]
+            with col_search_speed1:
+                st.markdown("<div style='font-size: 14px; font-weight: 800; margin-bottom: 5px; color: #1e293b;'>🔍 Cari Info Kode Broker:</div>", unsafe_allow_html=True)
+                search_query = st.text_input("Ketik Kode / Nama Broker", label_visibility="collapsed", placeholder="Contoh: AK atau Mandiri").strip()
                 
-                if not df_filtered.empty:
-                    df_filtered_styled = apply_styler_map(df_filtered.style, style_warna_broker, subset=['Kode', 'Nama'])
-                    st.dataframe(df_filtered_styled, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("Tidak ditemukan broker yang cocok dengan pencarian.")
+                if search_query:
+                    df_semua_broker = pd.DataFrame(list(DARI_BROKER_NAMA_MAP.items()), columns=['Kode', 'Nama'])
+                    df_filtered = df_semua_broker[
+                        df_semua_broker['Kode'].str.contains(search_query, case=False, na=False) | 
+                        df_semua_broker['Nama'].str.contains(search_query, case=False, na=False)
+                    ]
+                    
+                    if not df_filtered.empty:
+                        df_filtered_styled = apply_styler_map(df_filtered.style, style_warna_broker, subset=['Kode', 'Nama'])
+                        st.dataframe(df_filtered_styled, use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("Tidak ditemukan broker yang cocok.")
 
-            if total_transaksi > 0:
-                posisi_marker = (total_akumulasi / total_transaksi) * 100
+            with col_search_speed2:
+                if total_transaksi > 0:
+                    posisi_marker = (total_akumulasi / total_transaksi) * 100
 
-                meter_html = f"""
-                <style>
-                .broker-action-container {{
-                    width: 100%; margin-top: 10px; margin-bottom: 30px; padding: 25px 20px;
-                    background-color: rgba(15, 23, 42, 0.6); border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-                }}
-                .broker-action-title {{
-                    font-weight: 800; font-size: 18px; margin-bottom: 25px; color: #f8fafc; text-align: center; letter-spacing: 1px;
-                }}
-                .bar-wrapper {{
-                    position: relative; height: 20px; border-radius: 10px; display: flex; overflow: hidden;
-                    box-shadow: 0 0 10px rgba(0,0,0,0.8) inset;
-                }}
-                .bar-segment {{
-                    flex: 1; border-right: 2px solid rgba(0,0,0,0.6);
-                }}
-                .bar-segment:last-child {{ border-right: none; }}
-                .bg-big-dist {{ background-color: #dc2626; }}
-                .bg-dist {{ background-color: #ef4444; }}
-                .bg-neutral {{ background-color: #94a3b8; }}
-                .bg-acc {{ background-color: #22c55e; }}
-                .bg-big-acc {{ background-color: #16a34a; }}
+                    meter_html = f"""
+                    <style>
+                    .broker-action-container {{
+                        width: 100%; padding: 15px 20px;
+                        background-color: rgba(15, 23, 42, 0.7); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                    }}
+                    .broker-action-title {{
+                        font-weight: 800; font-size: 14px; margin-bottom: 15px; color: #f8fafc; text-align: center; letter-spacing: 1px;
+                    }}
+                    .bar-wrapper {{
+                        position: relative; height: 14px; border-radius: 7px; display: flex; overflow: hidden;
+                        box-shadow: 0 0 8px rgba(0,0,0,0.8) inset;
+                    }}
+                    .bar-segment {{
+                        flex: 1; border-right: 1px solid rgba(0,0,0,0.5);
+                    }}
+                    .bar-segment:last-child {{ border-right: none; }}
+                    .bg-big-dist {{ background-color: #dc2626; }}
+                    .bg-dist {{ background-color: #ef4444; }}
+                    .bg-neutral {{ background-color: #94a3b8; }}
+                    .bg-acc {{ background-color: #22c55e; }}
+                    .bg-big-acc {{ background-color: #16a34a; }}
 
-                .marker-container {{
-                    position: absolute; top: -12px; bottom: -12px; left: {posisi_marker:.1f}%;
-                    transform: translateX(-50%); z-index: 10;
-                    display: flex; flex-direction: column; align-items: center; justify-content: center;
-                    transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-                }}
-                .marker-line {{
-                    width: 8px; height: 44px; background-color: #fde047; border-radius: 4px;
-                    box-shadow: 0 0 15px 4px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
-                }}
-                .labels {{
-                    display: flex; justify-content: space-between; font-size: 15px; color: #ffffff; margin-top: 15px; font-weight: 700;
-                    text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-                }}
-                </style>
+                    .marker-container {{
+                        position: absolute; top: -8px; bottom: -8px; left: {posisi_marker:.1f}%;
+                        transform: translateX(-50%); z-index: 10;
+                        display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    }}
+                    .marker-line {{
+                        width: 6px; height: 30px; background-color: #fde047; border-radius: 3px;
+                        box-shadow: 0 0 10px 2px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
+                    }}
+                    .labels {{
+                        display: flex; justify-content: space-between; font-size: 12px; color: #ffffff; margin-top: 12px; font-weight: 700;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+                    }}
+                    </style>
 
-                <div class="broker-action-container">
-                    <div class="broker-action-title">📊 JARUM KECEPATAN BANDAR 📊</div>
-                    <div class="bar-wrapper">
-                        <div class="bar-segment bg-big-dist"></div>
-                        <div class="bar-segment bg-dist"></div>
-                        <div class="bar-segment bg-neutral"></div>
-                        <div class="bar-segment bg-acc"></div>
-                        <div class="bar-segment bg-big-acc"></div>
-                        <div class="marker-container">
-                            <div class="marker-line"></div>
+                    <div class="broker-action-container">
+                        <div class="broker-action-title">📊 JARUM KECEPATAN BANDAR 📊</div>
+                        <div class="bar-wrapper">
+                            <div class="bar-segment bg-big-dist"></div>
+                            <div class="bar-segment bg-dist"></div>
+                            <div class="bar-segment bg-neutral"></div>
+                            <div class="bar-segment bg-acc"></div>
+                            <div class="bar-segment bg-big-acc"></div>
+                            <div class="marker-container">
+                                <div class="marker-line"></div>
+                            </div>
+                        </div>
+                        <div class="labels">
+                            <span style="color: #fca5a5;">🩸 Bahaya</span>
+                            <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Ragu-ragu</span>
+                            <span style="color: #86efac;">🚀 Aman</span>
                         </div>
                     </div>
-                    <div class="labels">
-                        <span style="color: #ffcccc;">🩸 Sangat Bahaya</span>
-                        <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Ragu-ragu</span>
-                        <span style="color: #ccffcc;">🚀 Sangat Aman</span>
-                    </div>
-                </div>
-                """
-                st.markdown(meter_html, unsafe_allow_html=True)
+                    """
+                    st.markdown(meter_html, unsafe_allow_html=True)
+            # =====================================================================
 
             # =====================================================================
-            # 🚀 INI DIA RADAR HISTORI HARIAN PER BROKER YANG KEMBALI HADIR!
+            # 🚀 RADAR HISTORI HARIAN PER BROKER
             # =====================================================================
             st.write("---")
             st.markdown("### 🕵️‍♂️ Lacak Histori Harian per 1 Broker Khusus")
@@ -1055,54 +1061,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
                 else:
                     st.info("Tidak ada data yang jual")
-
-            if not df_trend.empty:
-                st.write("---")
-                st.markdown("### 📈 Riwayat Kekuatan Bandar Dari Hari ke Hari")
-                st.markdown("Grafik ini menunjukkan apakah Bandar (Top 5 Gabungan) terus menambah belanjaan tiap hari (hijau membesar), atau malah asyik jualan (merah membesar).")
-                
-                df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
-                df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-                df_trend['Pct_Dis'] = (df_trend['Distribusi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
-
-                df_trend['Label_Aku'] = df_trend['Pct_Aku'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                df_trend['Label_Dis'] = df_trend['Pct_Dis'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
-                
-                df_melt = df_trend.melt(
-                    id_vars=['Date', 'Pct_Aku', 'Pct_Dis'], 
-                    value_vars=['Akumulasi (Top 5)', 'Distribusi (Top 5)'], 
-                    var_name='Kategori', 
-                    value_name='Nilai'
-                )
-                df_melt['Persentase (%)'] = df_melt.apply(lambda row: row['Pct_Aku'] if 'Akumulasi' in row['Kategori'] else row['Pct_Dis'], axis=1)
-                
-                color_scale_trend = alt.Scale(
-                    domain=['Akumulasi (Top 5)', 'Distribusi (Top 5)'],
-                    range=['#2ecc71', '#e74c3c'] 
-                )
-                
-                bars = alt.Chart(df_melt).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=25).encode(
-                    x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
-                    y=alt.Y('Nilai:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s')),
-                    color=alt.Color('Kategori:N', scale=color_scale_trend, legend=alt.Legend(title=None, orient='top')),
-                    tooltip=['Date', 'Kategori', alt.Tooltip('Nilai:Q', format=',.0f', title='Jumlah Uang (Rp)'), alt.Tooltip('Persentase (%):Q', format='.1f')]
-                )
-
-                text_aku = alt.Chart(df_trend).mark_text(dy=-12, color='#22c55e', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Akumulasi (Top 5):Q'),
-                    text=alt.Text('Label_Aku:N')
-                )
-
-                text_dis = alt.Chart(df_trend).mark_text(dy=12, color='#ef4444', fontWeight='bold', fontSize=12).encode(
-                    x=alt.X('Date:O'),
-                    y=alt.Y('Distribusi (Top 5):Q'),
-                    text=alt.Text('Label_Dis:N')
-                )
-                
-                rule = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
-                
-                st.altair_chart(alt.layer(bars, text_aku, text_dis, rule).properties(height=380), use_container_width=True)
 
             st.write("---")
             st.markdown(f"## 🤖 Kesimpulan Robot Untuk Saham Ini: {emiten_res}")
