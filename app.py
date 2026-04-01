@@ -480,9 +480,10 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
 
                         url_trend = f"https://api.invezgo.com/analysis/inventory-chart/stock/{emiten_input}"
                         params_trend = {
+                            # 🚀 BUG FIX: MENGGUNAKAN SCOPE 'NET' AGAR BISA TERLIHAT STATUS MINUSNYA
                             "from": start_date.strftime("%Y-%m-%d"),
                             "to": end_date.strftime("%Y-%m-%d"),
-                            "scope": "val",
+                            "scope": "net",
                             "investor": "all",
                             "market": "RG"
                         }
@@ -1094,6 +1095,54 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
                 else:
                     st.info("Tidak ada data yang jual")
+
+            if not df_trend.empty:
+                st.write("---")
+                st.markdown("### 📈 Riwayat Kekuatan Bandar Dari Hari ke Hari")
+                st.markdown("Grafik ini menunjukkan apakah Bandar (Top 5 Gabungan) terus menambah belanjaan tiap hari (hijau membesar), atau malah asyik jualan (merah membesar).")
+                
+                df_trend['Total_Abs'] = df_trend['Akumulasi (Top 5)'].abs() + df_trend['Distribusi (Top 5)'].abs()
+                df_trend['Pct_Aku'] = (df_trend['Akumulasi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
+                df_trend['Pct_Dis'] = (df_trend['Distribusi (Top 5)'].abs() / df_trend['Total_Abs'] * 100).fillna(0)
+
+                df_trend['Label_Aku'] = df_trend['Pct_Aku'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
+                df_trend['Label_Dis'] = df_trend['Pct_Dis'].apply(lambda x: f"{x:.0f}%" if x >= 1 else "")
+                
+                df_melt = df_trend.melt(
+                    id_vars=['Date', 'Pct_Aku', 'Pct_Dis'], 
+                    value_vars=['Akumulasi (Top 5)', 'Distribusi (Top 5)'], 
+                    var_name='Kategori', 
+                    value_name='Nilai'
+                )
+                df_melt['Persentase (%)'] = df_melt.apply(lambda row: row['Pct_Aku'] if 'Akumulasi' in row['Kategori'] else row['Pct_Dis'], axis=1)
+                
+                color_scale_trend = alt.Scale(
+                    domain=['Akumulasi (Top 5)', 'Distribusi (Top 5)'],
+                    range=['#2ecc71', '#e74c3c'] 
+                )
+                
+                bars = alt.Chart(df_melt).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=25).encode(
+                    x=alt.X('Date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45, grid=False)),
+                    y=alt.Y('Nilai:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s')),
+                    color=alt.Color('Kategori:N', scale=color_scale_trend, legend=alt.Legend(title=None, orient='top')),
+                    tooltip=['Date', 'Kategori', alt.Tooltip('Nilai:Q', format=',.0f', title='Jumlah Uang (Rp)'), alt.Tooltip('Persentase (%):Q', format='.1f')]
+                )
+
+                text_aku = alt.Chart(df_trend).mark_text(dy=-12, color='#22c55e', fontWeight='bold', fontSize=12).encode(
+                    x=alt.X('Date:O'),
+                    y=alt.Y('Akumulasi (Top 5):Q'),
+                    text=alt.Text('Label_Aku:N')
+                )
+
+                text_dis = alt.Chart(df_trend).mark_text(dy=12, color='#ef4444', fontWeight='bold', fontSize=12).encode(
+                    x=alt.X('Date:O'),
+                    y=alt.Y('Distribusi (Top 5):Q'),
+                    text=alt.Text('Label_Dis:N')
+                )
+                
+                rule = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='gray', strokeWidth=1).encode(y='y:Q')
+                
+                st.altair_chart(alt.layer(bars, text_aku, text_dis, rule).properties(height=380), use_container_width=True)
 
             st.write("---")
             st.markdown(f"## 🤖 Kesimpulan Robot Untuk Saham Ini: {emiten_res}")
