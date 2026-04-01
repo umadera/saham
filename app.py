@@ -7,9 +7,9 @@ import altair as alt
 import time
 import json
 import os
-import base64 # 🟢 Import baru untuk fitur Print Full Table
+import base64 
 import streamlit.components.v1 as components 
-import screener_teknikal # 🟢 Panggil file screener teknikal
+import screener_teknikal 
 
 # Mengatur konfigurasi halaman website
 st.set_page_config(page_title="Screener Saham Pro", page_icon="📈", layout="wide")
@@ -171,7 +171,6 @@ if pilihan_menu == "🏠 Dashboard":
     st.success("Dashboard aktif! (Fitur IHSG disembunyikan sementara agar kode ringkas)")
 
 elif pilihan_menu == "📊 Screener Teknikal":
-    # 🟢 Cukup panggil fungsinya di sini, kode utama tetap bersih!
     screener_teknikal.jalankan_teknikal()
 
 elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
@@ -301,18 +300,15 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 else:
                     st.session_state['multi_screener_data'] = "KOSONG"
 
-        # 🟢 MENAMPILKAN TABEL SCREENER MASSAL & FITUR CETAK FULL PDF
         if st.session_state['multi_screener_data'] is not None:
             if isinstance(st.session_state['multi_screener_data'], pd.DataFrame):
                 
-                # Memformat DataFrame agar tampil cantik
                 df_display = st.session_state['multi_screener_data'].copy()
                 df_display['Probabilitas 🎯'] = df_display['Probabilitas 🎯'].apply(lambda x: f"{x:.1f}%")
                 df_display['Net Volume (Rp)'] = df_display['Net Volume (Rp)'].apply(format_rupiah)
                 df_display['Top 5 Akumulasi'] = df_display['Top 5 Akumulasi'].apply(format_rupiah)
                 df_display['Top 5 Distribusi'] = df_display['Top 5 Distribusi'].apply(format_rupiah)
                 
-                # --- LOGIKA PRINT FULL TABEL ---
                 html_table = df_display.to_html(index=False)
                 b64_table = base64.b64encode(html_table.encode('utf-8')).decode('utf-8')
                 
@@ -352,7 +348,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 with col_lead_msg:
                     st.success("🎯 **LEADERBOARD SAHAM:**")
                 with col_lead_csv:
-                    # Tombol Native Download CSV Streamlit
                     csv_data = df_display.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label="💾 Download Excel (CSV)",
@@ -362,7 +357,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                         use_container_width=True
                     )
                 with col_lead_pdf:
-                    # Tombol Print Full PDF dari JS
                     components.html(js_print_code, height=55)
 
                 st.dataframe(df_display, use_container_width=True)
@@ -563,7 +557,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
             with col_alert:
                 st.success(f"✅ Data ditarik! Rentang: **{start_date_res.strftime('%d %b %Y')}** s/d **{end_date_res.strftime('%d %b %Y')}**")
             with col_print:
-                # Tombol Print Khusus Dashboard Bawah (Hanya Print Layar Visible)
                 components.html(
                     """
                     <script>
@@ -623,6 +616,7 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                         analisa_teks = f"Terdapat indikasi buang barang dengan kekuatan **{rasio:.1f}%**, namun belum terlalu agresif."
                         aksi_teks = "Waspada tekanan jual. Scalper hanya boleh masuk jika ada *spike* volume mendadak dan *Offer* tebal dijebol dalam hitungan detik."
 
+            st.write("---")
             st.markdown("### 📊 Ringkasan Transaksi Top 5 Broker")
             col_met1, col_met2, col_met3, col_met4, col_met5 = st.columns([1, 1, 1, 1.2, 1.2])
             
@@ -690,8 +684,152 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                 """
                 st.markdown(html_probabilitas, unsafe_allow_html=True)
 
-            st.write("---")
 
+            st.write("---")
+            st.markdown("### 📋 Detail Transaksi (Klasik View)")
+            style_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
+
+            df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
+            df_buy.columns = ['Buy', 'B.Val', 'B.Lot', 'B.Avg']
+            
+            if current_price > 0:
+                df_buy['B.%'] = df_buy['B.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
+            else:
+                df_buy['B.%'] = 0.0
+
+            df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
+            df_sell['Net Lot'] = df_sell['Net Lot'].abs()
+            df_sell.columns = ['Sell', 'S.Val', 'S.Lot', 'S.Avg']
+            
+            if current_price > 0:
+                df_sell['S.%'] = df_sell['S.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
+            else:
+                df_sell['S.%'] = 0.0
+
+            def color_pct(val):
+                if val > 0:
+                    return 'color: #2ecc71; font-weight: bold;'
+                elif val < 0:
+                    return 'color: #e74c3c; font-weight: bold;'
+                return 'color: #94a3b8; font-weight: bold;'
+
+            col_tabel1, col_tabel2 = st.columns(2)
+            
+            with col_tabel1:
+                st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 AKUMULASI (BUY)</h5>", unsafe_allow_html=True)
+                styler_buy = getattr(df_buy.style, style_method)(style_warna_broker, subset=['Buy'])
+                styler_buy = getattr(styler_buy, style_method)(lambda x: 'color: #2ecc71; font-weight: bold;', subset=['B.Val', 'B.Lot', 'B.Avg'])
+                styler_buy = getattr(styler_buy, style_method)(color_pct, subset=['B.%'])
+                styler_buy = styler_buy.format({'B.Val': 'Rp {:,.0f}', 'B.Lot': '{:,.0f}', 'B.Avg': 'Rp {:,.0f}', 'B.%': '{:+.2f}%'})
+                st.dataframe(styler_buy, use_container_width=True, hide_index=True)
+
+            with col_tabel2:
+                st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DISTRIBUSI (SELL)</h5>", unsafe_allow_html=True)
+                styler_sell = getattr(df_sell.style, style_method)(style_warna_broker, subset=['Sell'])
+                styler_sell = getattr(styler_sell, style_method)(lambda x: 'color: #e74c3c; font-weight: bold;', subset=['S.Val', 'S.Lot', 'S.Avg'])
+                styler_sell = getattr(styler_sell, style_method)(color_pct, subset=['S.%'])
+                styler_sell = styler_sell.format({'S.Val': 'Rp {:,.0f}', 'S.Lot': '{:,.0f}', 'S.Avg': 'Rp {:,.0f}', 'S.%': '{:+.2f}%'})
+                st.dataframe(styler_sell, use_container_width=True, hide_index=True)
+
+            # 🟢 KODE YANG DIPERBAIKI: LEGENDA & PENCARIAN BROKER SEJAJAR
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_leg, col_search = st.columns([2, 1])
+            
+            with col_leg:
+                st.markdown("""
+                <div style='font-size: 15px; margin-top: 5px;'>
+                    <span style='color:#2ecc71; font-weight:bold;'>● Zombie</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                    <span style='color:#9b59b6; font-weight:bold;'>● Asing</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                    <span style='color:#e74c3c; font-weight:bold;'>● Ritel</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
+                    <span style='color:#3498db; font-weight:bold;'>● Institusi</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col_search:
+                # Menghilangkan label yang memakan tempat dengan label_visibility="collapsed"
+                search_query = st.text_input("Cari Broker", "", placeholder="🔍 Cek kode broker (Cth: AK)...", label_visibility="collapsed").strip()
+            
+            if search_query:
+                df_semua_broker = pd.DataFrame(list(DARI_BROKER_NAMA_MAP.items()), columns=['Kode', 'Nama'])
+                df_filtered = df_semua_broker[
+                    df_semua_broker['Kode'].str.contains(search_query, case=False, na=False) | 
+                    df_semua_broker['Nama'].str.contains(search_query, case=False, na=False)
+                ]
+                
+                if not df_filtered.empty:
+                    style_list_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
+                    df_filtered_styled = getattr(df_filtered.style, style_list_method)(style_warna_broker, subset=['Kode', 'Nama'])
+                    st.dataframe(df_filtered_styled, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Tidak ditemukan broker yang cocok.")
+
+            if total_transaksi > 0:
+                posisi_marker = (total_akumulasi / total_transaksi) * 100
+
+                # 🟢 KODE YANG DIPERBAIKI: UKURAN ACTION METER LEBIH TIPIS & KECIL
+                meter_html = f"""
+                <style>
+                .broker-action-container {{
+                    width: 100%; margin-top: 5px; margin-bottom: 15px; padding: 12px 15px;
+                    background-color: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                }}
+                .broker-action-title {{
+                    font-weight: 800; font-size: 14px; margin-bottom: 10px; color: #f8fafc; text-align: center; letter-spacing: 0.5px;
+                }}
+                .bar-wrapper {{
+                    position: relative; height: 14px; border-radius: 7px; display: flex; overflow: hidden;
+                    box-shadow: 0 0 8px rgba(0,0,0,0.8) inset;
+                }}
+                .bar-segment {{
+                    flex: 1; border-right: 1px solid rgba(0,0,0,0.6);
+                }}
+                .bar-segment:last-child {{ border-right: none; }}
+                .bg-big-dist {{ background-color: #dc2626; }}
+                .bg-dist {{ background-color: #ef4444; }}
+                .bg-neutral {{ background-color: #94a3b8; }}
+                .bg-acc {{ background-color: #22c55e; }}
+                .bg-big-acc {{ background-color: #16a34a; }}
+
+                .marker-container {{
+                    position: absolute; top: -6px; bottom: -6px; left: {posisi_marker:.1f}%;
+                    transform: translateX(-50%); z-index: 10;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+                }}
+                .marker-line {{
+                    width: 6px; height: 26px; background-color: #fde047; border-radius: 3px;
+                    box-shadow: 0 0 10px 3px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
+                }}
+                .labels {{
+                    display: flex; justify-content: space-between; font-size: 11px; color: #ffffff; margin-top: 8px; font-weight: 700;
+                    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+                }}
+                </style>
+
+                <div class="broker-action-container">
+                    <div class="broker-action-title">📊 BROKER ACTION METER 📊</div>
+                    <div class="bar-wrapper">
+                        <div class="bar-segment bg-big-dist"></div>
+                        <div class="bar-segment bg-dist"></div>
+                        <div class="bar-segment bg-neutral"></div>
+                        <div class="bar-segment bg-acc"></div>
+                        <div class="bar-segment bg-big-acc"></div>
+                        <div class="marker-container">
+                            <div class="marker-line"></div>
+                        </div>
+                    </div>
+                    <div class="labels">
+                        <span style="color: #ffcccc;">🩸 Big Dist</span>
+                        <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Neutral</span>
+                        <span style="color: #ccffcc;">🚀 Big Acc</span>
+                    </div>
+                </div>
+                """
+                st.markdown(meter_html, unsafe_allow_html=True)
+
+
+            st.write("---")
             col_chart1, col_chart2 = st.columns(2)
             
             df_aku_chart = df_akumulasi_top5.copy()
@@ -801,13 +939,13 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                         tooltip=['Date', 'Broker', 'Status_Aksi', alt.Tooltip('Value:Q', format=',.0f', title='Nilai Rp')]
                     ).properties(height=350)
                     
-                    text_bd_pos = alt.Chart(df_bd[df_bd['Value'] >= 0]).mark_text(fontWeight='bold', fontSize=12, dy=-12, color='white').encode(
+                    text_bd_pos = alt.Chart(df_bd[df_bd['Value'] >= 0]).mark_text(fontWeight='bold', fontSize=11, dy=-15, color='#0f172a').encode(
                         x=alt.X('Date:O'),
                         y=alt.Y('Value:Q'),
                         text=alt.Text('Label_Rp:N')
                     )
 
-                    text_bd_neg = alt.Chart(df_bd[df_bd['Value'] < 0]).mark_text(fontWeight='bold', fontSize=12, dy=12, color='white').encode(
+                    text_bd_neg = alt.Chart(df_bd[df_bd['Value'] < 0]).mark_text(fontWeight='bold', fontSize=11, dy=15, color='#0f172a').encode(
                         x=alt.X('Date:O'),
                         y=alt.Y('Value:Q'),
                         text=alt.Text('Label_Rp:N')
@@ -818,149 +956,6 @@ elif pilihan_menu == "🕵️‍♂️ Screener Bandarmologi":
                     st.altair_chart(chart_bd + text_bd_pos + text_bd_neg + rule_nol, use_container_width=True)
                 else:
                     st.info(f"Broker {broker_pilihan} tidak melakukan transaksi di rentang tanggal ini.")
-
-
-            # ==================================================================
-            # 📋 UI TABEL BERDAMPINGAN DENGAN FITUR PERSENTASE (PnL)
-            # ==================================================================
-            st.write("---")
-            st.markdown("### 📋 Detail Transaksi (Klasik View)")
-            style_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
-
-            df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
-            df_buy.columns = ['Buy', 'B.Val', 'B.Lot', 'B.Avg']
-            
-            if current_price > 0:
-                df_buy['B.%'] = df_buy['B.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
-            else:
-                df_buy['B.%'] = 0.0
-
-            df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
-            df_sell['Net Lot'] = df_sell['Net Lot'].abs()
-            df_sell.columns = ['Sell', 'S.Val', 'S.Lot', 'S.Avg']
-            
-            if current_price > 0:
-                df_sell['S.%'] = df_sell['S.Avg'].apply(lambda x: ((current_price - x) / x * 100) if x > 0 else 0)
-            else:
-                df_sell['S.%'] = 0.0
-
-            def color_pct(val):
-                if val > 0:
-                    return 'color: #2ecc71; font-weight: bold;'
-                elif val < 0:
-                    return 'color: #e74c3c; font-weight: bold;'
-                return 'color: #94a3b8; font-weight: bold;'
-
-            col_tabel1, col_tabel2 = st.columns(2)
-            
-            with col_tabel1:
-                st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 AKUMULASI (BUY)</h5>", unsafe_allow_html=True)
-                styler_buy = getattr(df_buy.style, style_method)(style_warna_broker, subset=['Buy'])
-                styler_buy = getattr(styler_buy, style_method)(lambda x: 'color: #2ecc71; font-weight: bold;', subset=['B.Val', 'B.Lot', 'B.Avg'])
-                styler_buy = getattr(styler_buy, style_method)(color_pct, subset=['B.%'])
-                styler_buy = styler_buy.format({'B.Val': 'Rp {:,.0f}', 'B.Lot': '{:,.0f}', 'B.Avg': 'Rp {:,.0f}', 'B.%': '{:+.2f}%'})
-                st.dataframe(styler_buy, use_container_width=True, hide_index=True)
-
-            with col_tabel2:
-                st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DISTRIBUSI (SELL)</h5>", unsafe_allow_html=True)
-                styler_sell = getattr(df_sell.style, style_method)(style_warna_broker, subset=['Sell'])
-                styler_sell = getattr(styler_sell, style_method)(lambda x: 'color: #e74c3c; font-weight: bold;', subset=['S.Val', 'S.Lot', 'S.Avg'])
-                styler_sell = getattr(styler_sell, style_method)(color_pct, subset=['S.%'])
-                styler_sell = styler_sell.format({'S.Val': 'Rp {:,.0f}', 'S.Lot': '{:,.0f}', 'S.Avg': 'Rp {:,.0f}', 'S.%': '{:+.2f}%'})
-                st.dataframe(styler_sell, use_container_width=True, hide_index=True)
-
-            st.markdown("""
-            <div style='text-align: center; font-size: 16px; margin-top: 10px; margin-bottom: 20px;'>
-                <span style='color:#2ecc71; font-weight:bold;'>● Zombie</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
-                <span style='color:#9b59b6; font-weight:bold;'>● Asing</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
-                <span style='color:#e74c3c; font-weight:bold;'>● Ritel</span> &nbsp;&nbsp;|&nbsp;&nbsp; 
-                <span style='color:#3498db; font-weight:bold;'>● Institusi</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("#### 🔍 Cari Info Kode Broker")
-            col_search1, col_search2 = st.columns([1, 2])
-            
-            with col_search1:
-                search_query = st.text_input("Ketik Kode / Nama Broker:", "", placeholder="Contoh: AK atau Mandiri").strip()
-            
-            if search_query:
-                df_semua_broker = pd.DataFrame(list(DARI_BROKER_NAMA_MAP.items()), columns=['Kode', 'Nama'])
-                df_filtered = df_semua_broker[
-                    df_semua_broker['Kode'].str.contains(search_query, case=False, na=False) | 
-                    df_semua_broker['Nama'].str.contains(search_query, case=False, na=False)
-                ]
-                
-                if not df_filtered.empty:
-                    style_list_method = 'map' if hasattr(pd.DataFrame.style, 'map') else 'applymap'
-                    df_filtered_styled = getattr(df_filtered.style, style_list_method)(style_warna_broker, subset=['Kode', 'Nama'])
-                    st.dataframe(df_filtered_styled, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("Tidak ditemukan broker yang cocok dengan pencarian.")
-
-            if total_transaksi > 0:
-                posisi_marker = (total_akumulasi / total_transaksi) * 100
-
-                meter_html = f"""
-                <style>
-                .broker-action-container {{
-                    width: 100%; margin-top: 10px; margin-bottom: 30px; padding: 25px 20px;
-                    background-color: rgba(15, 23, 42, 0.6); border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-                }}
-                .broker-action-title {{
-                    font-weight: 800; font-size: 18px; margin-bottom: 25px; color: #f8fafc; text-align: center; letter-spacing: 1px;
-                }}
-                .bar-wrapper {{
-                    position: relative; height: 20px; border-radius: 10px; display: flex; overflow: hidden;
-                    box-shadow: 0 0 10px rgba(0,0,0,0.8) inset;
-                }}
-                .bar-segment {{
-                    flex: 1; border-right: 2px solid rgba(0,0,0,0.6);
-                }}
-                .bar-segment:last-child {{ border-right: none; }}
-                .bg-big-dist {{ background-color: #dc2626; }}
-                .bg-dist {{ background-color: #ef4444; }}
-                .bg-neutral {{ background-color: #94a3b8; }}
-                .bg-acc {{ background-color: #22c55e; }}
-                .bg-big-acc {{ background-color: #16a34a; }}
-
-                .marker-container {{
-                    position: absolute; top: -12px; bottom: -12px; left: {posisi_marker:.1f}%;
-                    transform: translateX(-50%); z-index: 10;
-                    display: flex; flex-direction: column; align-items: center; justify-content: center;
-                    transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-                }}
-                .marker-line {{
-                    width: 8px; height: 44px; background-color: #fde047; border-radius: 4px;
-                    box-shadow: 0 0 15px 4px rgba(253, 224, 71, 0.9); border: 1px solid #ffffff;
-                }}
-                .labels {{
-                    display: flex; justify-content: space-between; font-size: 15px; color: #ffffff; margin-top: 15px; font-weight: 700;
-                    text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-                }}
-                </style>
-
-                <div class="broker-action-container">
-                    <div class="broker-action-title">📊 BROKER ACTION METER 📊</div>
-                    <div class="bar-wrapper">
-                        <div class="bar-segment bg-big-dist"></div>
-                        <div class="bar-segment bg-dist"></div>
-                        <div class="bar-segment bg-neutral"></div>
-                        <div class="bar-segment bg-acc"></div>
-                        <div class="bar-segment bg-big-acc"></div>
-                        <div class="marker-container">
-                            <div class="marker-line"></div>
-                        </div>
-                    </div>
-                    <div class="labels">
-                        <span style="color: #ffcccc;">🩸 Big Dist</span>
-                        <span style="position: absolute; left: 50%; transform: translateX(-50%); color: #e2e8f0;">⚖️ Neutral</span>
-                        <span style="color: #ccffcc;">🚀 Big Acc</span>
-                    </div>
-                </div>
-                """
-                st.markdown(meter_html, unsafe_allow_html=True)
 
             st.write("---")
             st.markdown("### 🥧 Peta Kekuatan Broker (Asing vs Ritel vs Institusi)")
