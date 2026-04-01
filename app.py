@@ -753,12 +753,15 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             with col_chart1:
                 st.markdown("<h4 style='text-align: center;'>🟢 5 Besar Bandar Paling Rakus (Beli)</h4>", unsafe_allow_html=True)
                 if not df_aku_chart.empty:
+                    # FIX: Tambahkan margin 15% agar teks teratas tidak kepotong
+                    max_val_buy = float(df_aku_chart['Net Value'].max())
+                    
                     base_buy = alt.Chart(df_aku_chart).encode(
                         x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
                         tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
                     )
                     bar_buy = base_buy.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                        y=alt.Y('Net Value:Q', axis=alt.Axis(title='Value', format='~s')),
+                        y=alt.Y('Net Value:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_buy * 1.15])),
                         color=alt.Color('Warna:N', scale=None)
                     )
                     text_val_buy = base_buy.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
@@ -769,7 +772,7 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                         y=alt.Y('Net Value:Q'),
                         text='Label_Lot:N'
                     )
-                    chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=350)
+                    chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=380)
                     st.altair_chart(chart_buy, use_container_width=True)
 
                     st.markdown(f"""
@@ -787,12 +790,15 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
             with col_chart2:
                 st.markdown("<h4 style='text-align: center;'>🔴 5 Besar Bandar Buang Barang (Jual)</h4>", unsafe_allow_html=True)
                 if not df_dis_chart.empty:
+                    # FIX: Tambahkan margin 15% agar teks teratas tidak kepotong
+                    max_val_sell = float(df_dis_chart['Net Value Abs'].max())
+                    
                     base_sell = alt.Chart(df_dis_chart).encode(
                         x=alt.X('Broker_Label:N', sort='-y', axis=alt.Axis(labelAngle=-45, title=None)),
                         tooltip=['Broker', 'Tipe', alt.Tooltip('Net Value Abs:Q', format=',.0f', title='Nilai Uang (Rp)'), alt.Tooltip('Net Lot:Q', format=',.0f')]
                     )
                     bar_sell = base_sell.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                        y=alt.Y('Net Value Abs:Q', axis=alt.Axis(title='Value', format='~s')),
+                        y=alt.Y('Net Value Abs:Q', axis=alt.Axis(title='Value', format='~s'), scale=alt.Scale(domain=[0, max_val_sell * 1.15])),
                         color=alt.Color('Warna:N', scale=None)
                     )
                     text_val_sell = base_sell.mark_text(dy=-18, fontWeight=800, fontSize=12).encode(
@@ -803,7 +809,7 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                         y=alt.Y('Net Value Abs:Q'),
                         text='Label_Lot:N'
                     )
-                    chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=350)
+                    chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=380)
                     st.altair_chart(chart_sell, use_container_width=True)
 
                     st.markdown(f"""
@@ -817,43 +823,6 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     """, unsafe_allow_html=True)
                 else:
                     st.info("Tidak ada data Net Sell.")
-
-            st.write("---")
-            st.markdown("### 📋 Laporan Lengkap Pembeli & Penjual")
-
-            df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
-            df_buy['Floating (%)'] = ((current_price - df_buy['Buy Avg']) / df_buy['Buy Avg'] * 100).fillna(0) if current_price > 0 else 0.0
-            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal', 'Floating (%)']
-            
-            df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
-            df_sell['Net Lot'] = df_sell['Net Lot'].abs() 
-            df_sell['Jarak ke Harga Aktif (%)'] = ((current_price - df_sell['Sell Avg']) / df_sell['Sell Avg'] * 100).fillna(0) if current_price > 0 else 0.0
-            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual', 'Jarak ke Harga Aktif (%)']
-
-            def color_pct(val):
-                if pd.isna(val): return ''
-                if val > 0: return 'color: #2ecc71; font-weight: bold;'
-                elif val < 0: return 'color: #e74c3c; font-weight: bold;'
-                return ''
-
-            col_tabel1, col_tabel2 = st.columns(2)
-            
-            with col_tabel1:
-                st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 DAFTAR YANG MEMBELI SAHAM INI</h5>", unsafe_allow_html=True)
-                styler_buy = apply_styler_map(df_buy.style, style_warna_broker, subset=['Yang Beli'])
-                styler_buy = apply_styler_map(styler_buy, lambda x: 'color: #2ecc71; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal'])
-                styler_buy = apply_styler_map(styler_buy, color_pct, subset=['Floating (%)'])
-                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}', 'Floating (%)': '{:+.2f}%'})
-                st.dataframe(styler_buy, use_container_width=True, hide_index=True)
-
-            with col_tabel2:
-                st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DAFTAR YANG MENJUAL SAHAM INI</h5>", unsafe_allow_html=True)
-                styler_sell = apply_styler_map(df_sell.style, style_warna_broker, subset=['Yang Jual'])
-                styler_sell = apply_styler_map(styler_sell, lambda x: 'color: #e74c3c; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual'])
-                styler_sell = apply_styler_map(styler_sell, color_pct, subset=['Jarak ke Harga Aktif (%)'])
-                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
-                st.dataframe(styler_sell, use_container_width=True, hide_index=True)
-
 
             # =====================================================================
             # 🚀 UI PENCARIAN BROKER DAN JARUM KECEPATAN (DIRAMPINGKAN & BERSEBELAHAN)
@@ -979,9 +948,13 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                         df_broker_harian['Warna'] = df_broker_harian['value'].apply(lambda x: '#2ecc71' if x >= 0 else '#e74c3c')
                         df_broker_harian['Label'] = df_broker_harian['value'].apply(format_rupiah)
                         
+                        # FIX: Tambahkan 15% headroom ke radar harian agar aman
+                        max_val_harian = df_broker_harian['value'].abs().max()
+                        domain_harian = [-max_val_harian * 1.15, max_val_harian * 1.15]
+                        
                         chart_harian = alt.Chart(df_broker_harian).mark_bar(size=30, cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
                             x=alt.X('date:O', title='Tanggal Transaksi', axis=alt.Axis(labelAngle=-45)),
-                            y=alt.Y('value:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s')),
+                            y=alt.Y('value:Q', title='Jumlah Uang (Rp)', axis=alt.Axis(format='~s'), scale=alt.Scale(domain=domain_harian)),
                             color=alt.Color('Warna:N', scale=None),
                             tooltip=['date', alt.Tooltip('value:Q', format=',.0f', title='Jumlah Uang (Rp)')]
                         )
@@ -1059,6 +1032,42 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     st.altair_chart(alt.layer(pie_sell, text_sell).properties(height=320), use_container_width=True)
                 else:
                     st.info("Tidak ada data yang jual")
+
+            st.write("---")
+            st.markdown("### 📋 Laporan Lengkap Pembeli & Penjual")
+
+            df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
+            df_buy['Floating (%)'] = ((current_price - df_buy['Buy Avg']) / df_buy['Buy Avg'] * 100).fillna(0) if current_price > 0 else 0.0
+            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal', 'Floating (%)']
+            
+            df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
+            df_sell['Net Lot'] = df_sell['Net Lot'].abs() 
+            df_sell['Jarak ke Harga Aktif (%)'] = ((current_price - df_sell['Sell Avg']) / df_sell['Sell Avg'] * 100).fillna(0) if current_price > 0 else 0.0
+            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual', 'Jarak ke Harga Aktif (%)']
+
+            def color_pct(val):
+                if pd.isna(val): return ''
+                if val > 0: return 'color: #2ecc71; font-weight: bold;'
+                elif val < 0: return 'color: #e74c3c; font-weight: bold;'
+                return ''
+
+            col_tabel1, col_tabel2 = st.columns(2)
+            
+            with col_tabel1:
+                st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 DAFTAR YANG MEMBELI SAHAM INI</h5>", unsafe_allow_html=True)
+                styler_buy = apply_styler_map(df_buy.style, style_warna_broker, subset=['Yang Beli'])
+                styler_buy = apply_styler_map(styler_buy, lambda x: 'color: #2ecc71; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal'])
+                styler_buy = apply_styler_map(styler_buy, color_pct, subset=['Floating (%)'])
+                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}', 'Floating (%)': '{:+.2f}%'})
+                st.dataframe(styler_buy, use_container_width=True, hide_index=True)
+
+            with col_tabel2:
+                st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DAFTAR YANG MENJUAL SAHAM INI</h5>", unsafe_allow_html=True)
+                styler_sell = apply_styler_map(df_sell.style, style_warna_broker, subset=['Yang Jual'])
+                styler_sell = apply_styler_map(styler_sell, lambda x: 'color: #e74c3c; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual'])
+                styler_sell = apply_styler_map(styler_sell, color_pct, subset=['Jarak ke Harga Aktif (%)'])
+                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
+                st.dataframe(styler_sell, use_container_width=True, hide_index=True)
 
             st.write("---")
             st.markdown(f"## 🤖 Kesimpulan Robot Untuk Saham Ini: {emiten_res}")
