@@ -7,10 +7,47 @@ import altair as alt
 import time
 import json
 import os
+import re
 import streamlit.components.v1 as components 
 
 # Mengatur konfigurasi halaman website
 st.set_page_config(page_title="Screener Saham Pro", page_icon="📈", layout="wide")
+
+# ==============================================================================
+# 🎯 SISTEM BRUTE FORCE URL (DIJAMIN 1000% ANTI-NYANGKUT)
+# ==============================================================================
+if "init_url_selesai" not in st.session_state:
+    st.session_state["init_url_selesai"] = True
+    
+    data_url_mentah = {}
+    try: data_url_mentah = st.query_params.to_dict()
+    except:
+        try: data_url_mentah = st.query_params
+        except:
+            try: data_url_mentah = st.experimental_get_query_params()
+            except: pass
+            
+    teks_url = str(data_url_mentah).replace("'", "").replace('"', "")
+    
+    if "Bandarmologi" in teks_url:
+        st.session_state["menu_navigasi"] = "🕵️‍♂️ Deteksi Bandar Penuh"
+        
+        pencarian_ticker = re.search(r"ticker:\s*\[?([A-Z]{4})\]?", teks_url)
+        if pencarian_ticker:
+            st.session_state["ticker_aktif"] = pencarian_ticker.group(1)
+        else:
+            st.session_state["ticker_aktif"] = "BREN"
+    else:
+        st.session_state["menu_navigasi"] = "🏠 Halaman Depan"
+        st.session_state["ticker_aktif"] = "BREN"
+        
+    try: st.query_params.clear()
+    except: 
+        try: st.experimental_set_query_params()
+        except: pass
+
+if "menu_navigasi" not in st.session_state: st.session_state["menu_navigasi"] = "🏠 Halaman Depan"
+if "ticker_aktif" not in st.session_state: st.session_state["ticker_aktif"] = "BREN"
 
 # ==============================================================================
 # 💾 SISTEM MINI DATABASE & CLOUD SECRETS (HYBRID)
@@ -125,29 +162,35 @@ if 'multi_screener_data' not in st.session_state:
     st.session_state['multi_screener_data'] = None
 
 # ==============================================================================
-# 📊 MEMBUAT SIDEBAR MENU KEMBALI NORMAL
+# 📊 MEMBUAT SIDEBAR MENU
 # ==============================================================================
 st.sidebar.title("Menu Navigasi")
-pilihan_menu = st.sidebar.radio(
+daftar_menu = ["🏠 Halaman Depan", "📊 Deteksi Saham Cepat", "🕵️‍♂️ Deteksi Bandar Penuh", "⚙️ Pengaturan Kode Rahasia"]
+
+st.sidebar.radio(
     "Pilih Menu:",
-    ("🏠 Halaman Depan", "📊 Deteksi Saham Cepat", "🕵️‍♂️ Deteksi Bandar Penuh", "⚙️ Pengaturan Kode Rahasia")
+    daftar_menu,
+    key="menu_navigasi" 
 )
 
 st.sidebar.markdown("---")
 st.sidebar.info("Aplikasi Pencari Saham Otomatis V1.0\n\n⚡ **Versi Super Mudah Dipahami**")
 
-# --- KONTEN HALAMAN BERDASARKAN MENU ---
 
-if pilihan_menu == "🏠 Halaman Depan":
+# ==============================================================================
+# 🚀 KONTEN HALAMAN (BERDASARKAN MEMORI YANG AKTIF)
+# ==============================================================================
+
+if st.session_state["menu_navigasi"] == "🏠 Halaman Depan":
     st.title("Selamat Datang Bos! 📈")
     st.success("Sistem siap digunakan. Silakan pilih menu di sebelah kiri untuk mulai mencari cuan.")
 
-elif pilihan_menu == "📊 Deteksi Saham Cepat":
-    # Memanggil script Teknikal (Pastikan file screener_teknikal.py ada di folder yang sama)
+elif st.session_state["menu_navigasi"] == "📊 Deteksi Saham Cepat":
+    # Panggil file teknikal Anda
     import screener_teknikal
     screener_teknikal.jalankan_teknikal()
 
-elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
+elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh":
     st.title("Mesin Pelacak Bandar Saham 🕵️‍♂️")
     st.markdown("Alat canggih untuk mengintip **Apakah Bandar sedang memborong (Beli) atau membuang barang (Jual)**.")
     
@@ -332,7 +375,14 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
         with st.container():
             col_inp1, col_inp2 = st.columns([1, 2])
             with col_inp1:
-                emiten_input = st.text_input("Ketik Singkatan Saham (Contoh: BBCA):", "BREN").upper()
+                # 🟢 KOTAK INPUT INI OTOMATIS MEMBACA 'ticker_aktif' DARI MEMORI
+                def_ticker = st.session_state.get("ticker_aktif", "BREN")
+                emiten_input = st.text_input("Ketik Singkatan Saham (Contoh: BBCA):", value=def_ticker).upper()
+                
+                # Update memori jika user ngetik saham lain
+                if emiten_input != def_ticker:
+                    st.session_state["ticker_aktif"] = emiten_input
+
             with col_inp2:
                 kemarin = datetime.date.today() - datetime.timedelta(days=1)
                 tanggal_input = st.date_input(
@@ -703,7 +753,6 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     chart_buy = alt.layer(bar_buy, text_val_buy, text_lot_buy).properties(height=350)
                     st.altair_chart(chart_buy, use_container_width=True)
 
-                    # INI BLOK KODE YANG SEMPAT HILANG (DIKEMBALIKAN)
                     st.markdown(f"""
                     <div style="background: rgba(46, 204, 113, 0.08); border-top: 3px solid #2ecc71; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
                         <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Masuk (Top 5)</div>
@@ -714,7 +763,7 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.info("Tidak ada data yang beli.")
+                    st.info("Tidak ada data Net Buy.")
 
             with col_chart2:
                 st.markdown("<h4 style='text-align: center;'>🔴 5 Besar Bandar Buang Barang (Jual)</h4>", unsafe_allow_html=True)
@@ -738,7 +787,6 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     chart_sell = alt.layer(bar_sell, text_val_sell, text_lot_sell).properties(height=350)
                     st.altair_chart(chart_sell, use_container_width=True)
 
-                    # INI BLOK KODE YANG SEMPAT HILANG (DIKEMBALIKAN)
                     st.markdown(f"""
                     <div style="background: rgba(231, 76, 60, 0.08); border-top: 3px solid #e74c3c; padding: 12px; border-radius: 0 0 8px 8px; text-align: center; margin-top: -15px;">
                         <div style="font-size: 11px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase;">Total Uang Keluar (Top 5)</div>
@@ -749,17 +797,33 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.info("Tidak ada data yang jual.")
+                    st.info("Tidak ada data Net Sell.")
 
             st.write("---")
             st.markdown("### 📋 Laporan Lengkap Pembeli & Penjual")
 
+            # --- PENAMBAHAN FITUR CUAN / RUGI BROKER ---
             df_buy = df_akumulasi[['Broker', 'Net Value', 'Net Lot', 'Buy Avg']].copy()
-            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal']
+            if current_price > 0:
+                df_buy['Cuan/Rugi (%)'] = ((current_price - df_buy['Buy Avg']) / df_buy['Buy Avg'] * 100).fillna(0)
+            else:
+                df_buy['Cuan/Rugi (%)'] = 0.0
+            df_buy.columns = ['Yang Beli', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal', 'Floating (%)']
             
             df_sell = df_distribusi[['Broker', 'Net Value Abs', 'Net Lot', 'Sell Avg']].copy()
             df_sell['Net Lot'] = df_sell['Net Lot'].abs() 
-            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual']
+            if current_price > 0:
+                df_sell['Cuan/Rugi (%)'] = ((current_price - df_sell['Sell Avg']) / df_sell['Sell Avg'] * 100).fillna(0)
+            else:
+                df_sell['Cuan/Rugi (%)'] = 0.0
+            df_sell.columns = ['Yang Jual', 'Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual', 'Jarak ke Harga Aktif (%)']
+
+            # Fungsi untuk mewarnai persen keuntungan (Hijau Plus, Merah Minus)
+            def color_pct(val):
+                if pd.isna(val): return ''
+                if val > 0: return 'color: #2ecc71; font-weight: bold;'
+                elif val < 0: return 'color: #e74c3c; font-weight: bold;'
+                return ''
 
             col_tabel1, col_tabel2 = st.columns(2)
             
@@ -767,14 +831,16 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                 st.markdown("<h5 style='color: #2ecc71; text-align: center;'>🟢 DAFTAR YANG MEMBELI SAHAM INI</h5>", unsafe_allow_html=True)
                 styler_buy = apply_styler_map(df_buy.style, style_warna_broker, subset=['Yang Beli'])
                 styler_buy = apply_styler_map(styler_buy, lambda x: 'color: #2ecc71; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Modal'])
-                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}'})
+                styler_buy = apply_styler_map(styler_buy, color_pct, subset=['Floating (%)'])
+                styler_buy = styler_buy.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Modal': 'Rp {:,.0f}', 'Floating (%)': '{:+.2f}%'})
                 st.dataframe(styler_buy, use_container_width=True, hide_index=True)
 
             with col_tabel2:
                 st.markdown("<h5 style='color: #e74c3c; text-align: center;'>🔴 DAFTAR YANG MENJUAL SAHAM INI</h5>", unsafe_allow_html=True)
                 styler_sell = apply_styler_map(df_sell.style, style_warna_broker, subset=['Yang Jual'])
                 styler_sell = apply_styler_map(styler_sell, lambda x: 'color: #e74c3c; font-weight: bold;', subset=['Jumlah Uang (Rp)', 'Total Lot', 'Harga Jual'])
-                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}'})
+                styler_sell = apply_styler_map(styler_sell, color_pct, subset=['Jarak ke Harga Aktif (%)'])
+                styler_sell = styler_sell.format({'Jumlah Uang (Rp)': 'Rp {:,.0f}', 'Total Lot': '{:,.0f}', 'Harga Jual': 'Rp {:,.0f}', 'Jarak ke Harga Aktif (%)': '{:+.2f}%'})
                 st.dataframe(styler_sell, use_container_width=True, hide_index=True)
 
             st.markdown("""
@@ -1106,7 +1172,7 @@ elif pilihan_menu == "🕵️‍♂️ Deteksi Bandar Penuh":
                     st.markdown(f"**👑 Sosok Pemain Utamanya:** Broker dengan kode **{broker_top}** ({tipe_top}) adalah orang yang belanja paling banyak hari ini. Terus awasi broker ini besok!")
 
 # 4. MENU PENGATURAN API
-elif pilihan_menu == "⚙️ Pengaturan Kode Rahasia":
+elif st.session_state["menu_navigasi"] == "⚙️ Pengaturan Kode Rahasia":
     st.title("Pengaturan Kode API")
     st.markdown("Agar aplikasi ini bisa mencuri data bandar dari bursa, pastikan Anda memasukkan *API Key* Invezgo Anda di bawah ini.")
     
