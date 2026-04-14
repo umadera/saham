@@ -6,6 +6,7 @@ import datetime
 import altair as alt
 import time
 import json
+import modul_bsjp
 import os
 import re
 import streamlit.components.v1 as components 
