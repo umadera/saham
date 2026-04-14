@@ -1694,20 +1694,24 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
 # ⚡ MODE SCALPER PRO (BSJP)
 # ==============================================================================
 elif st.session_state["menu_navigasi"] == "⚡ Mode Scalper Pro (BSJP)":
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0f172a, #1e1b4b, #312e81); padding: 30px; border-radius: 12px; border-left: 8px solid #fbbf24; margin-bottom: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
-        <h2 style="color: #fbbf24; margin: 0; font-weight: 900; letter-spacing: 1px;">⚡ MODE SCALPER PRO V3</h2>
-        <p style="color: #cbd5e1; font-size: 15px; margin-top: 5px;">Fokus: Deteksi Akumulasi Bandar + Ketebalan Bid/Offer + Probabilitas BSJP (Beli Sore Jual Pagi).</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    
+    # Memanggil tampilan Dashboard Tabel dari modul terpisah!
+    modul_bsjp.render_dashboard_bsjp()
+    
+    # Jika Anda tetap ingin mempertahankan fitur pencarian / kalkulasi probabilitas
+    # yang kita buat sebelumnya, Anda bisa menambahkannya di bawah tabel ini:
+    st.markdown("<hr style='border-color: #334155; margin: 30px 0;'>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #0f172a; font-weight: 800;'>🔍 Analisa Single Ticker (BSJP)</h4>", unsafe_allow_html=True)
+    
     col_scalp1, col_scalp2 = st.columns([1, 2])
     with col_scalp1:
         ticker_scalp = st.text_input("🎯 Masukkan Kode Saham:", value="CUAN").upper()
         btn_scalp = st.button("🔥 SCAN MOMENTUM!", type="primary", use_container_width=True)
 
     if btn_scalp:
-        st.info("Menganalisis momentum dan formasi orderbook...")
+        # Pindahkan logika kalkulator probabilitas dari iterasi sebelumnya ke sini
+        # (Silakan di-copy dari jawaban saya sebelumnya jika ingin dipertahankan)
+        st.info(f"Fitur kalkulator probabilitas untuk {ticker_scalp} sedang aktif...")
         
         # -------------------------------------------------------------------
         # 🛠️ AREA INTEGRASI API ORDERBOOK (BID/OFFER)
