@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import time
-import random
 
 def render_dashboard_bsjp():
     # 1. HEADER DASHBOARD
@@ -15,36 +14,52 @@ def render_dashboard_bsjp():
     # ==========================================
     # 2. INISIALISASI DATABASE KE MEMORI STREAMLIT
     # ==========================================
-    # Kita simpan data di session_state agar hasil edit tidak hilang saat web me-refresh
+    cols = ["EMITEN", "KATEGORI", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
+    
     if "data_tabel_bsjp" not in st.session_state:
+        # Mock Data awal sudah ditambahkan kategori simulasi
         data_awal = [
-            ["CUAN", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
-            ["BRPT", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
-            ["PTRO", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
-            ["TPIA", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
-            ["CDIA", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
-            ["NICL", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
-            ["NCKL", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
-            ["YELO", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
-            ["PIPA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
-            ["NRCA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
+            ["CUAN", "TAMBANG", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
+            ["BRPT", "ENERGI", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
+            ["PTRO", "TAMBANG", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
+            ["TPIA", "ENERGI", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
+            ["CDIA", "TECH", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
+            ["NICL", "TAMBANG", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
+            ["NCKL", "TAMBANG", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
+            ["YELO", "TECH", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
+            ["PIPA", "INFRA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
+            ["NRCA", "INFRA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
         ]
-        cols = ["EMITEN", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
         st.session_state["data_tabel_bsjp"] = pd.DataFrame(data_awal, columns=cols)
+    else:
+        # PENGAMANAN (MIGRATION): Jika sesi sebelumnya belum punya kolom KATEGORI, kita tambahkan otomatis
+        if "KATEGORI" not in st.session_state["data_tabel_bsjp"].columns:
+            st.session_state["data_tabel_bsjp"].insert(1, "KATEGORI", "UMUM")
 
-    # 3. PANEL KONTROL (INPUT EMITEN, TIMEFRAME, & REFRESH)
+    # 3. PANEL KONTROL (INPUT EMITEN, FILTER KATEGORI, TIMEFRAME, & REFRESH)
     with st.container():
         st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>", unsafe_allow_html=True)
         
-        col_input, col_time, col_btn = st.columns([2, 2, 1])
+        # Layout dibagi 4 kolom sekarang
+        col_input, col_kat, col_time, col_btn = st.columns([1.5, 1.5, 1.5, 1])
+        
         with col_input:
-            emiten_pencarian = st.text_input("🔍 Cari Emiten di Tabel:", placeholder="Contoh: BREN, CUAN...").upper()
+            emiten_pencarian = st.text_input("🔍 Cari Emiten:", placeholder="Contoh: CUAN...").upper()
+            
+        with col_kat:
+            # Mengambil daftar kategori unik secara otomatis dari tabel
+            kategori_unik = sorted(st.session_state["data_tabel_bsjp"]["KATEGORI"].dropna().unique().tolist())
+            list_kategori = ["Semua Kategori"] + kategori_unik
+            kategori_pilihan = st.selectbox("📂 Filter Kategori:", list_kategori, index=0)
+            
         with col_time:
             time_options = ["1 Hari", "1 Jam", "30 Menit", "5 Menit", "1 Menit"]
-            timeframe = st.selectbox("⏳ Pilih Timeframe:", time_options, index=0)
+            timeframe = st.selectbox("⏳ Timeframe:", time_options, index=0)
+            
         with col_btn:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             btn_refresh = st.button("🔄 REFRESH", type="primary", use_container_width=True)
+            
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Efek Loading Refresh
@@ -57,31 +72,35 @@ def render_dashboard_bsjp():
     # 4. MENU KELOLA EMITEN (TAMBAH / EDIT / HAPUS)
     # ==========================================
     with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten di Tabel"):
-        st.info("💡 **Cara Penggunaan:** Anda bisa langsung mengetik untuk mengubah teks di dalam tabel di bawah ini. Untuk **Menghapus** atau **Menambah Baris**, perhatikan sisi paling kiri dan paling bawah tabel editor ini.")
+        st.info("💡 **Cara Penggunaan:** Ketik di kolom **KATEGORI** untuk mengelompokkan saham (misal: GOLD, BANK, TAMBANG). Menu dropdown di atas akan otomatis mendeteksi kategori baru yang Anda buat.")
         
-        # Menggunakan data_editor interaktif bawaan Streamlit
         edited_df = st.data_editor(
             st.session_state["data_tabel_bsjp"],
-            num_rows="dynamic", # Memungkinkan penambahan dan penghapusan baris
+            num_rows="dynamic", 
             use_container_width=True,
             key="editor_database_bsjp"
         )
         
         if st.button("💾 Simpan Perubahan Data"):
+            # Memastikan teks kategori selalu huruf besar (Uppercase) agar rapi
+            edited_df['KATEGORI'] = edited_df['KATEGORI'].str.upper()
             st.session_state["data_tabel_bsjp"] = edited_df
             st.success("✅ Database berhasil diperbarui!")
             time.sleep(0.5)
             st.rerun()
 
     # ==========================================
-    # 5. PERSIAPAN DATA UNTUK DITAMPILKAN
+    # 5. PERSIAPAN DATA UNTUK DITAMPILKAN & FILTERING
     # ==========================================
-    # Ambil data dari memori
     df_display = st.session_state["data_tabel_bsjp"].copy()
 
-    # Terapkan filter pencarian jika kolom pencarian diisi
+    # 5a. Filter berdasarkan pencarian nama Emiten
     if emiten_pencarian:
         df_display = df_display[df_display['EMITEN'].str.contains(emiten_pencarian, na=False)]
+        
+    # 5b. Filter berdasarkan Dropdown Kategori
+    if kategori_pilihan != "Semua Kategori":
+        df_display = df_display[df_display['KATEGORI'] == kategori_pilihan]
 
     # ==========================================
     # 6. LOGIKA PEWARNAAN (STYLING) HTML DARK MODE
@@ -157,5 +176,5 @@ def render_dashboard_bsjp():
     
     st.markdown(custom_css + f"<div class='custom-table-container'>{html_table}</div>", unsafe_allow_html=True)
     
-    # Keterangan Timeframe Aktif
-    st.caption(f"⚡ Menampilkan data terakhir berdasarkan timeframe: **{timeframe}**")
+    # Keterangan Filter & Timeframe Aktif
+    st.caption(f"⚡ Menampilkan kategori **{kategori_pilihan}** berdasarkan timeframe: **{timeframe}**")
