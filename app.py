@@ -1743,36 +1743,36 @@ elif st.session_state["menu_navigasi"] == "⚡ Mode Scalper Pro (BSJP)":
         keputusan = "HAJAR KANAN (HAKA) 🚀" if probabilitas_besok_naik > 65 else ("TUNGGU RETRACE ⏳" if probabilitas_besok_naik > 45 else "HINDARI / BUANG 🩸")
 
         st.markdown(f"""
-        <div style="background: white; border: 2px solid {warna_prob}; border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h3 style="margin:0; color:#64748b; font-size:16px; text-transform:uppercase;">Probabilitas {ticker_scalp} Besok Naik</h3>
-                <h1 style="margin:0; color:{warna_prob}; font-size:55px; font-weight:900;">{probabilitas_besok_naik:.1f}%</h1>
-                <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 10px; background: #f1f5f9; display: inline-block; padding: 5px 20px; border-radius: 20px;">
-                    Aksi: {keputusan}
-                </div>
-            </div>
-            
-            <hr style="border-color: #e2e8f0;">
-            
-            <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 20px;">
-                <div style="flex: 1;">
-                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Bid (Demand)</div>
-                    <div style="font-size: 22px; font-weight: 900; color: #10b981;">{mock_total_bid_vol:,} Lot</div>
-                    <div style="font-size: 13px; font-weight: bold; color: #064e3b; background: #d1fae5; border-radius: 10px; margin: 5px 20px;">{bid_power:.1f}%</div>
-                </div>
-                <div style="flex: 1; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
-                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Dominasi Bandar</div>
-                    <div style="font-size: 22px; font-weight: 900; color: #3b82f6;">{mock_bandar_akum_pct:.1f}%</div>
-                    <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Top 5 Akumulasi</div>
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Offer (Supply)</div>
-                    <div style="font-size: 22px; font-weight: 900; color: #ef4444;">{mock_total_offer_vol:,} Lot</div>
-                    <div style="font-size: 13px; font-weight: bold; color: #7f1d1d; background: #fee2e2; border-radius: 10px; margin: 5px 20px;">{100 - bid_power:.1f}%</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div style="background: white; border: 2px solid {warna_prob}; border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+  <div style="text-align: center; margin-bottom: 20px;">
+    <h3 style="margin:0; color:#64748b; font-size:16px; text-transform:uppercase;">Probabilitas {ticker_scalp} Besok Naik</h3>
+    <h1 style="margin:0; color:{warna_prob}; font-size:55px; font-weight:900;">{probabilitas_besok_naik:.1f}%</h1>
+    <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 10px; background: #f1f5f9; display: inline-block; padding: 5px 20px; border-radius: 20px;">
+        Aksi: {keputusan}
+    </div>
+  </div>
+  
+  <hr style="border-color: #e2e8f0;">
+  
+  <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 20px;">
+    <div style="flex: 1;">
+        <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Bid (Demand)</div>
+        <div style="font-size: 22px; font-weight: 900; color: #10b981;">{mock_total_bid_vol:,} Lot</div>
+        <div style="font-size: 13px; font-weight: bold; color: #064e3b; background: #d1fae5; border-radius: 10px; margin: 5px 20px;">{bid_power:.1f}%</div>
+    </div>
+    <div style="flex: 1; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+        <div style="font-size: 12px; color: #64748b; font-weight: bold;">Dominasi Bandar</div>
+        <div style="font-size: 22px; font-weight: 900; color: #3b82f6;">{mock_bandar_akum_pct:.1f}%</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Top 5 Akumulasi</div>
+    </div>
+    <div style="flex: 1;">
+        <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Offer (Supply)</div>
+        <div style="font-size: 22px; font-weight: 900; color: #ef4444;">{mock_total_offer_vol:,} Lot</div>
+        <div style="font-size: 13px; font-weight: bold; color: #7f1d1d; background: #fee2e2; border-radius: 10px; margin: 5px 20px;">{100 - bid_power:.1f}%</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # 4. MENU PENGATURAN API
 elif st.session_state["menu_navigasi"] == "⚙️ Pengaturan Kode Rahasia":
