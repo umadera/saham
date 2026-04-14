@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 import random
+import os
 
 def render_dashboard_bsjp():
     # 1. HEADER DASHBOARD
@@ -13,27 +14,36 @@ def render_dashboard_bsjp():
     """, unsafe_allow_html=True)
 
     # ==========================================
-    # 2. INISIALISASI DATABASE KE MEMORI STREAMLIT
+    # 2. INISIALISASI DATABASE PERMANEN (CSV)
     # ==========================================
+    FILE_DB_BSJP = "database_bsjp.csv"
     cols = ["EMITEN", "KATEGORI", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
     
     if "data_tabel_bsjp" not in st.session_state:
-        data_awal = [
-            ["CUAN", "TAMBANG", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
-            ["BRPT", "ENERGI", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
-            ["PTRO", "TAMBANG", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
-            ["TPIA", "ENERGI", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
-            ["CDIA", "TECH", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
-            ["NICL", "TAMBANG", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
-            ["NCKL", "TAMBANG", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
-            ["YELO", "TECH", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
-            ["PIPA", "INFRA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
-            ["NRCA", "INFRA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
-        ]
-        st.session_state["data_tabel_bsjp"] = pd.DataFrame(data_awal, columns=cols)
+        # Cek apakah file database CSV sudah ada di folder komputer
+        if os.path.exists(FILE_DB_BSJP):
+            st.session_state["data_tabel_bsjp"] = pd.read_csv(FILE_DB_BSJP)
+        else:
+            # Jika belum ada (pertama kali buka), buat data default lalu simpan ke CSV
+            data_awal = [
+                ["CUAN", "TAMBANG", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
+                ["BRPT", "ENERGI", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
+                ["PTRO", "TAMBANG", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
+                ["TPIA", "ENERGI", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
+                ["CDIA", "TECH", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
+                ["NICL", "TAMBANG", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
+                ["NCKL", "TAMBANG", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
+                ["YELO", "TECH", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
+                ["PIPA", "INFRA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
+                ["NRCA", "INFRA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
+            ]
+            df_awal = pd.DataFrame(data_awal, columns=cols)
+            st.session_state["data_tabel_bsjp"] = df_awal
+            df_awal.to_csv(FILE_DB_BSJP, index=False)
     else:
         if "KATEGORI" not in st.session_state["data_tabel_bsjp"].columns:
             st.session_state["data_tabel_bsjp"].insert(1, "KATEGORI", "UMUM")
+            st.session_state["data_tabel_bsjp"].to_csv(FILE_DB_BSJP, index=False)
 
     # 3. PANEL KONTROL
     with st.container():
@@ -43,7 +53,7 @@ def render_dashboard_bsjp():
         with col_input:
             emiten_pencarian = st.text_input("🔍 Cari Emiten:", placeholder="Contoh: CUAN...").upper()
         with col_kat:
-            kategori_unik = sorted(st.session_state["data_tabel_bsjp"]["KATEGORI"].dropna().unique().tolist())
+            kategori_unik = sorted(st.session_state["data_tabel_bsjp"]["KATEGORI"].dropna().astype(str).unique().tolist())
             list_kategori = ["Semua Kategori"] + kategori_unik
             kategori_pilihan = st.selectbox("📂 Filter Kategori:", list_kategori, index=0)
         with col_time:
@@ -66,7 +76,7 @@ def render_dashboard_bsjp():
             for i in df_temp.index:
                 val_gain = str(df_temp.at[i, 'GAIN']).strip()
                 
-                if pd.isna(df_temp.at[i, 'GAIN']) or val_gain == 'None' or val_gain == '':
+                if pd.isna(df_temp.at[i, 'GAIN']) or val_gain == 'None' or val_gain == 'nan' or val_gain == '':
                     df_temp.at[i, 'GAIN'] = f"{random.uniform(-3, 8):.1f}%"
                     df_temp.at[i, 'WICK'] = f"{random.uniform(0, 3):.1f}%"
                     df_temp.at[i, 'VAL'] = f"{random.uniform(10, 500):.1f}M"
@@ -90,8 +100,10 @@ def render_dashboard_bsjp():
                     df_temp.at[i, 'ZONE'] = random.choice(["DISKON", "AWAS", "BUY"])
 
             st.session_state["data_tabel_bsjp"] = df_temp
+            # Simpan hasil refresh data dummy ini ke file CSV agar tidak hilang
+            df_temp.to_csv(FILE_DB_BSJP, index=False)
             
-        st.toast(f"✅ Data {timeframe} berhasil diperbarui!", icon="🚀")
+        st.toast(f"✅ Data {timeframe} berhasil diperbarui dan disimpan permanen!", icon="🚀")
         st.rerun()
 
     # ==========================================
@@ -99,12 +111,10 @@ def render_dashboard_bsjp():
     # ==========================================
     with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten"):
         st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
-        st.info("💡 **Tampilan Disederhanakan:** Anda sekarang hanya perlu mengetik **EMITEN** dan **KATEGORI**-nya saja. 18 kolom angka sengaja disembunyikan agar Anda tidak pusing. Angka akan terisi otomatis saat Anda klik tombol REFRESH di atas.")
+        st.info("💡 **Tampilan Disederhanakan:** Anda sekarang hanya perlu mengetik **EMITEN** dan **KATEGORI**-nya saja. Angka akan terisi otomatis saat Anda klik tombol REFRESH di atas.")
         
-        # 🔴 LOGIKA UNTUK MENYEMBUNYIKAN SEMUA KOLOM KECUALI EMITEN & KATEGORI
         hidden_cols = {col: None for col in cols if col not in ["EMITEN", "KATEGORI"]}
         
-        # Kita panggil data_editor tapi dengan kolom-kolom yang disembunyikan
         edited_df = st.data_editor(
             st.session_state["data_tabel_bsjp"],
             column_config=hidden_cols,
@@ -113,14 +123,16 @@ def render_dashboard_bsjp():
             key="editor_database_bsjp"
         )
         
-        if st.button("💾 Simpan Daftar Emiten", type="primary"):
-            # Merapikan input (Otomatis huruf besar semua dan hilangkan spasi sisa)
+        if st.button("💾 Simpan Daftar Emiten Secara Permanen", type="primary"):
             edited_df['EMITEN'] = edited_df['EMITEN'].astype(str).str.upper().str.strip()
             edited_df['KATEGORI'] = edited_df['KATEGORI'].astype(str).str.upper().str.strip()
             
             st.session_state["data_tabel_bsjp"] = edited_df
-            st.success("✅ Emiten berhasil ditambahkan! Silakan tutup menu ini dan klik tombol REFRESH warna merah.")
-            time.sleep(1)
+            # INI KUNCINYA: Simpan data yang sudah diedit ke dalam file CSV fisik
+            edited_df.to_csv(FILE_DB_BSJP, index=False)
+            
+            st.success("✅ Emiten berhasil ditambahkan & tersimpan aman di Hardisk! Silakan tutup menu ini dan klik tombol REFRESH.")
+            time.sleep(1.5)
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
