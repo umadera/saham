@@ -12,60 +12,79 @@ def render_dashboard_bsjp():
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. PANEL KONTROL (INPUT EMITEN, TIMEFRAME, & TOMBOL REFRESH)
+    # ==========================================
+    # 2. INISIALISASI DATABASE KE MEMORI STREAMLIT
+    # ==========================================
+    # Kita simpan data di session_state agar hasil edit tidak hilang saat web me-refresh
+    if "data_tabel_bsjp" not in st.session_state:
+        data_awal = [
+            ["CUAN", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
+            ["BRPT", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
+            ["PTRO", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
+            ["TPIA", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
+            ["CDIA", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
+            ["NICL", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
+            ["NCKL", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
+            ["YELO", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
+            ["PIPA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
+            ["NRCA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
+        ]
+        cols = ["EMITEN", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
+        st.session_state["data_tabel_bsjp"] = pd.DataFrame(data_awal, columns=cols)
+
+    # 3. PANEL KONTROL (INPUT EMITEN, TIMEFRAME, & REFRESH)
     with st.container():
-        st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px;'>", unsafe_allow_html=True)
+        st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>", unsafe_allow_html=True)
         
-        # Dibagi jadi 3 kolom agar tombol Refresh punya tempat khusus di kanan
         col_input, col_time, col_btn = st.columns([2, 2, 1])
-        
         with col_input:
-            emiten_bsjp = st.text_input("🔍 Cari Emiten Khusus:", placeholder="Contoh: BREN, CUAN...").upper()
-        
+            emiten_pencarian = st.text_input("🔍 Cari Emiten di Tabel:", placeholder="Contoh: BREN, CUAN...").upper()
         with col_time:
             time_options = ["1 Hari", "1 Jam", "30 Menit", "5 Menit", "1 Menit"]
             timeframe = st.selectbox("⏳ Pilih Timeframe:", time_options, index=0)
-            
         with col_btn:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             btn_refresh = st.button("🔄 REFRESH", type="primary", use_container_width=True)
-        
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Efek Loading saat tombol Refresh ditekan
+    # Efek Loading Refresh
     if btn_refresh:
-        with st.spinner(f"📡 Menarik data bandarmologi untuk timeframe {timeframe}..."):
-            time.sleep(0.8) # Jeda simulasi loading sistem (bisa dihapus jika API sudah cepat)
-        st.toast(f"✅ Data {timeframe} berhasil diperbarui!", icon="🚀")
+        with st.spinner(f"📡 Memuat ulang data {timeframe}..."):
+            time.sleep(0.5) 
+        st.toast(f"✅ Data diperbarui!", icon="🚀")
 
     # ==========================================
-    # 3. MOCK DATA (Simulasi Data)
+    # 4. MENU KELOLA EMITEN (TAMBAH / EDIT / HAPUS)
     # ==========================================
-    # Sedikit trik agar data 'terlihat' berubah saat Anda refresh beda timeframe (Untuk preview UI)
-    acak = 0 if not btn_refresh else random.randint(-2, 2)
-    
-    data = [
-        ["CUAN", f"{5.9 + acak:.1f}%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
-        ["BRPT", f"{3.2 + acak:.1f}%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
-        ["PTRO", f"{2.4 + (acak*0.5):.1f}%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
-        ["TPIA", f"{16.8 + acak:.1f}%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
-        ["CDIA", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
-        ["NICL", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
-        ["NCKL", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
-        ["YELO", "-0.9%", "1%", "19M", "67%", "BULL", "SIDE", "NET", "SID", "WAIT", 104, 105, 110, 102, "1%", "HOLD 🛡️", "⭐", 42, "DISKON"],
-        ["PIPA", "12.5%", "0%", "16.2M", "694%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 129, 135, 140, 124, "4.7%", "TREND 📈", "⭐⭐⭐", 49, "DISKON"],
-        ["NRCA", "5.2%", "0%", "7.9M", "229%", "BEAR", "BO", "BIG ACC", "SID", "S-ACCUM 🚀", 590, 605, 614, 578, "2.5%", "REVERSAL 🔄", "⭐⭐⭐", 55, "DISKON"]
-    ]
-    
-    cols = ["EMITEN", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
-    df = pd.DataFrame(data, columns=cols)
-
-    # Logika Filter Emiten
-    if emiten_bsjp:
-        df = df[df['EMITEN'].str.contains(emiten_bsjp)]
+    with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten di Tabel"):
+        st.info("💡 **Cara Penggunaan:** Anda bisa langsung mengetik untuk mengubah teks di dalam tabel di bawah ini. Untuk **Menghapus** atau **Menambah Baris**, perhatikan sisi paling kiri dan paling bawah tabel editor ini.")
+        
+        # Menggunakan data_editor interaktif bawaan Streamlit
+        edited_df = st.data_editor(
+            st.session_state["data_tabel_bsjp"],
+            num_rows="dynamic", # Memungkinkan penambahan dan penghapusan baris
+            use_container_width=True,
+            key="editor_database_bsjp"
+        )
+        
+        if st.button("💾 Simpan Perubahan Data"):
+            st.session_state["data_tabel_bsjp"] = edited_df
+            st.success("✅ Database berhasil diperbarui!")
+            time.sleep(0.5)
+            st.rerun()
 
     # ==========================================
-    # 4. LOGIKA PEWARNAAN (STYLING)
+    # 5. PERSIAPAN DATA UNTUK DITAMPILKAN
+    # ==========================================
+    # Ambil data dari memori
+    df_display = st.session_state["data_tabel_bsjp"].copy()
+
+    # Terapkan filter pencarian jika kolom pencarian diisi
+    if emiten_pencarian:
+        df_display = df_display[df_display['EMITEN'].str.contains(emiten_pencarian, na=False)]
+
+    # ==========================================
+    # 6. LOGIKA PEWARNAAN (STYLING) HTML DARK MODE
     # ==========================================
     def highlight_cells(val):
         style = 'color: white; font-weight: bold; '
@@ -89,10 +108,10 @@ def render_dashboard_bsjp():
             
         return style
 
-    if hasattr(df.style, 'map'):
-        styled_df = df.style.map(highlight_cells)
+    if hasattr(df_display.style, 'map'):
+        styled_df = df_display.style.map(highlight_cells)
     else:
-        styled_df = df.style.applymap(highlight_cells)
+        styled_df = df_display.style.applymap(highlight_cells)
 
     styled_df = styled_df.set_properties(**{
         'background-color': '#0f172a',
@@ -112,7 +131,7 @@ def render_dashboard_bsjp():
         ]
     }])
 
-    # 5. RENDER TABEL (COMPACT HTML)
+    # 7. RENDER TABEL UTAMA (COMPACT HTML)
     html_table = styled_df.to_html().replace("\n", "")
     
     custom_css = """
@@ -123,6 +142,7 @@ def render_dashboard_bsjp():
         background-color: #0f172a;
         padding: 10px;
         border-radius: 8px;
+        margin-top: 15px;
     }
     .custom-table-container table {
         width: 100%;
