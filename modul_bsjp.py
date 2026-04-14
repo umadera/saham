@@ -80,11 +80,15 @@ def render_dashboard_bsjp():
         ]
     }])
 
-    # ==========================================
+    
+# ==========================================
     # 3. RENDER TABEL SEBAGAI HTML CUSTOM
     # Ini memastikan tabel terlihat 'rapat' ala TradingView
     # ==========================================
     html_table = styled_df.to_html()
+    
+    # 🔴 TAMBAHAN KRUSIAL: Hapus semua "enter" (newline) agar tidak dibaca sebagai teks oleh Streamlit
+    html_table = html_table.replace("\n", "") 
     
     # CSS Tambahan agar tabel responsive & tidak ada jarak putih
     custom_css = """
@@ -105,6 +109,6 @@ def render_dashboard_bsjp():
         white-space: nowrap;
     }
     </style>
-    """
+    """.replace("\n", "") # 🔴 Hapus enter di CSS juga
     
     st.markdown(custom_css + f"<div class='custom-table-container'>{html_table}</div>", unsafe_allow_html=True)
