@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import time
+import random
 
 def render_dashboard_bsjp():
     # 1. HEADER DASHBOARD
@@ -10,10 +12,12 @@ def render_dashboard_bsjp():
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. PANEL KONTROL (INPUT EMITEN & TIMEFRAME)
+    # 2. PANEL KONTROL (INPUT EMITEN, TIMEFRAME, & TOMBOL REFRESH)
     with st.container():
         st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px;'>", unsafe_allow_html=True)
-        col_input, col_time = st.columns([1, 1])
+        
+        # Dibagi jadi 3 kolom agar tombol Refresh punya tempat khusus di kanan
+        col_input, col_time, col_btn = st.columns([2, 2, 1])
         
         with col_input:
             emiten_bsjp = st.text_input("🔍 Cari Emiten Khusus:", placeholder="Contoh: BREN, CUAN...").upper()
@@ -21,17 +25,30 @@ def render_dashboard_bsjp():
         with col_time:
             time_options = ["1 Hari", "1 Jam", "30 Menit", "5 Menit", "1 Menit"]
             timeframe = st.selectbox("⏳ Pilih Timeframe:", time_options, index=0)
+            
+        with col_btn:
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            btn_refresh = st.button("🔄 REFRESH", type="primary", use_container_width=True)
         
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # Efek Loading saat tombol Refresh ditekan
+    if btn_refresh:
+        with st.spinner(f"📡 Menarik data bandarmologi untuk timeframe {timeframe}..."):
+            time.sleep(0.8) # Jeda simulasi loading sistem (bisa dihapus jika API sudah cepat)
+        st.toast(f"✅ Data {timeframe} berhasil diperbarui!", icon="🚀")
 
     # ==========================================
     # 3. MOCK DATA (Simulasi Data)
     # ==========================================
+    # Sedikit trik agar data 'terlihat' berubah saat Anda refresh beda timeframe (Untuk preview UI)
+    acak = 0 if not btn_refresh else random.randint(-2, 2)
+    
     data = [
-        ["CUAN", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
-        ["BRPT", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
-        ["PTRO", "2.4%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
-        ["TPIA", "16.8%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
+        ["CUAN", f"{5.9 + acak:.1f}%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
+        ["BRPT", f"{3.2 + acak:.1f}%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
+        ["PTRO", f"{2.4 + (acak*0.5):.1f}%", "0.5%", "625.1M", "138%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 5325, 5375, 5546, 5214, "0.9%", "TREND 📈", "⭐⭐", 38, "DISKON"],
+        ["TPIA", f"{16.8 + acak:.1f}%", "0%", "291.2M", "339%", "BULL", "BO", "BIG ACC", "HAKA", "S-ACCUM 🚀", 6075, 6075, 6344, 5942, "0%", "REVERSAL 🔄", "⭐⭐⭐", 49, "DISKON"],
         ["CDIA", "1.5%", "0.5%", "136.8M", "183%", "BEAR", "SIDE", "ACC", "SID", "ACCUM", 1005, 1015, 1040, 988, "1%", "FRESH 🌟", "⭐⭐⭐", 44, "DISKON"],
         ["NICL", "3.6%", "1.2%", "40.2M", "194%", "BEAR", "SIDE", "ACC", "SID", "HAKA", 855, 860, 878, 844, "0.6%", "REVERSAL 🔄", "⭐⭐", 46, "DISKON"],
         ["NCKL", "0.9%", "0%", "31.2M", "50%", "BEAR", "SIDE", "NET", "SID", "WAIT", 1145, 1145, 1172, 1132, "0%", "ENTRY 🚪", "⭐", 39, "DISKON"],
@@ -121,4 +138,4 @@ def render_dashboard_bsjp():
     st.markdown(custom_css + f"<div class='custom-table-container'>{html_table}</div>", unsafe_allow_html=True)
     
     # Keterangan Timeframe Aktif
-    st.caption(f"⚡ Menampilkan data berdasarkan timeframe: {timeframe}")
+    st.caption(f"⚡ Menampilkan data terakhir berdasarkan timeframe: **{timeframe}**")
