@@ -59,16 +59,13 @@ def render_dashboard_bsjp():
     # ==========================================
     if btn_refresh:
         with st.spinner(f"📡 Menarik data {timeframe} dari server..."):
-            time.sleep(1) # Animasi loading
+            time.sleep(1) 
             
-            # Ambil data dari memori
             df_temp = st.session_state["data_tabel_bsjp"].copy()
             
-            # Looping untuk mencari kolom yang masih "None" atau kosong
             for i in df_temp.index:
                 val_gain = str(df_temp.at[i, 'GAIN']).strip()
                 
-                # Jika datanya kosong/None, kita suntikkan data simulasi
                 if pd.isna(df_temp.at[i, 'GAIN']) or val_gain == 'None' or val_gain == '':
                     df_temp.at[i, 'GAIN'] = f"{random.uniform(-3, 8):.1f}%"
                     df_temp.at[i, 'WICK'] = f"{random.uniform(0, 3):.1f}%"
@@ -92,31 +89,40 @@ def render_dashboard_bsjp():
                     df_temp.at[i, 'RSI'] = random.randint(30, 80)
                     df_temp.at[i, 'ZONE'] = random.choice(["DISKON", "AWAS", "BUY"])
 
-            # Simpan kembali data yang sudah di-update ke memori
             st.session_state["data_tabel_bsjp"] = df_temp
             
         st.toast(f"✅ Data {timeframe} berhasil diperbarui!", icon="🚀")
-        st.rerun() # Memaksa layar me-refresh agar tabel langsung berubah
+        st.rerun()
 
     # ==========================================
-    # 4. MENU KELOLA EMITEN
+    # 4. MENU KELOLA EMITEN (UI DISEDERHANAKAN 100%)
     # ==========================================
-    with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten di Tabel"):
-        st.info("💡 **Tips:** Jika Anda menambahkan Emiten baru, biarkan kolom angkanya kosong. Lalu klik tombol **🔄 REFRESH** di atas untuk menarik datanya.")
+    with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten"):
+        st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;'>", unsafe_allow_html=True)
+        st.info("💡 **Tampilan Disederhanakan:** Anda sekarang hanya perlu mengetik **EMITEN** dan **KATEGORI**-nya saja. 18 kolom angka sengaja disembunyikan agar Anda tidak pusing. Angka akan terisi otomatis saat Anda klik tombol REFRESH di atas.")
         
+        # 🔴 LOGIKA UNTUK MENYEMBUNYIKAN SEMUA KOLOM KECUALI EMITEN & KATEGORI
+        hidden_cols = {col: None for col in cols if col not in ["EMITEN", "KATEGORI"]}
+        
+        # Kita panggil data_editor tapi dengan kolom-kolom yang disembunyikan
         edited_df = st.data_editor(
             st.session_state["data_tabel_bsjp"],
+            column_config=hidden_cols,
             num_rows="dynamic", 
             use_container_width=True,
             key="editor_database_bsjp"
         )
         
-        if st.button("💾 Simpan Perubahan Data"):
-            edited_df['KATEGORI'] = edited_df['KATEGORI'].str.upper()
+        if st.button("💾 Simpan Daftar Emiten", type="primary"):
+            # Merapikan input (Otomatis huruf besar semua dan hilangkan spasi sisa)
+            edited_df['EMITEN'] = edited_df['EMITEN'].astype(str).str.upper().str.strip()
+            edited_df['KATEGORI'] = edited_df['KATEGORI'].astype(str).str.upper().str.strip()
+            
             st.session_state["data_tabel_bsjp"] = edited_df
-            st.success("✅ Emiten berhasil ditambahkan!")
-            time.sleep(0.5)
+            st.success("✅ Emiten berhasil ditambahkan! Silakan tutup menu ini dan klik tombol REFRESH warna merah.")
+            time.sleep(1)
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ==========================================
     # 5. FILTERING DATA
