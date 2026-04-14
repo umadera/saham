@@ -170,7 +170,13 @@ if 'multi_screener_data' not in st.session_state:
 # 📊 MEMBUAT SIDEBAR MENU
 # ==============================================================================
 st.sidebar.title("Menu Navigasi")
-daftar_menu = ["🏠 Halaman Depan", "📊 Deteksi Saham Cepat", "🕵️‍♂️ Deteksi Bandar Penuh", "⚙️ Pengaturan Kode Rahasia"]
+daftar_menu = [
+    "🏠 Halaman Depan", 
+    "📊 Deteksi Saham Cepat", 
+    "🕵️‍♂️ Deteksi Bandar Penuh", 
+    "⚡ Mode Scalper Pro (BSJP)",
+    "⚙️ Pengaturan Kode Rahasia"
+]
 
 st.sidebar.radio(
     "Pilih Menu:",
@@ -1628,50 +1634,50 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                     cl_price = "-"
 
                 ai_html = f"""
-                <div style="background: linear-gradient(135deg, #020617, #0f172a, #1e293b); border: 2px solid #334155; border-radius: 16px; padding: 35px; margin-bottom: 25px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(to right, #3b82f6, #8b5cf6, #ec4899);"></div>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;">
-                        <span style="font-size: 24px;">🤖</span>
-                        <h4 style="color: #94a3b8; margin: 0; text-align: center; font-size: 15px; letter-spacing: 3px; text-transform: uppercase; font-weight: 800;">Terminal Analisa Robot Ahli</h4>
-                    </div>
-                    <div style="text-align: center; font-size: 36px; font-weight: 900; color: {ai_color}; margin-bottom: 35px; text-shadow: 0 0 20px {ai_color}60; letter-spacing: 1px;">{ai_rekomendasi}</div>
-                    
-                    <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
-                        <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #3b82f6; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02); transition: transform 0.2s;">
-                            <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">📍 Area Beli Terbaik</div>
-                            <div style="font-size: 22px; font-weight: 900; color: #f8fafc; line-height: 1.3;">{area_entry}</div>
-                        </div>
-                        <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #10b981; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
-                            <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Target Jual (Take Profit)</div>
-                            <div style="font-size: 24px; font-weight: 900; color: #34d399; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{tp_price}</div>
-                        </div>
-                        <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #ef4444; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
-                            <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">✂️ Batas Rugi (Cutloss)</div>
-                            <div style="font-size: 24px; font-weight: 900; color: #f87171; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{cl_price}</div>
-                        </div>
-                        <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #f59e0b; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
-                            <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">⚖️ Rasio Kemenangan</div>
-                            <div style="font-size: 28px; font-weight: 900; color: #fbbf24; text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);">{prob_naik:.1f}%</div>
-                        </div>
-                    </div>
-                </div>
-                """
+<div style="background: linear-gradient(135deg, #020617, #0f172a, #1e293b); border: 2px solid #334155; border-radius: 16px; padding: 35px; margin-bottom: 25px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); position: relative; overflow: hidden;">
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(to right, #3b82f6, #8b5cf6, #ec4899);"></div>
+  <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;">
+    <span style="font-size: 24px;">🤖</span>
+    <h4 style="color: #94a3b8; margin: 0; text-align: center; font-size: 15px; letter-spacing: 3px; text-transform: uppercase; font-weight: 800;">Terminal Analisa Robot Ahli</h4>
+  </div>
+  <div style="text-align: center; font-size: 36px; font-weight: 900; color: {ai_color}; margin-bottom: 35px; text-shadow: 0 0 20px {ai_color}60; letter-spacing: 1px;">{ai_rekomendasi}</div>
+  
+  <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+    <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #3b82f6; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02); transition: transform 0.2s;">
+      <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">📍 Area Beli Terbaik</div>
+      <div style="font-size: 22px; font-weight: 900; color: #f8fafc; line-height: 1.3;">{area_entry}</div>
+    </div>
+    <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #10b981; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
+      <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">🎯 Target Jual (Take Profit)</div>
+      <div style="font-size: 24px; font-weight: 900; color: #34d399; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{tp_price}</div>
+    </div>
+    <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #ef4444; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
+      <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">✂️ Batas Rugi (Cutloss)</div>
+      <div style="font-size: 24px; font-weight: 900; color: #f87171; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{cl_price}</div>
+    </div>
+    <div style="flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; text-align: center; border-bottom: 4px solid #f59e0b; box-shadow: inset 0 2px 4px rgba(255,255,255,0.02);">
+      <div style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">⚖️ Rasio Kemenangan</div>
+      <div style="font-size: 28px; font-weight: 900; color: #fbbf24; text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);">{prob_naik:.1f}%</div>
+    </div>
+  </div>
+</div>
+"""
                 st.markdown(ai_html, unsafe_allow_html=True)
 
                 # Narasi Robot
                 st.markdown(f"""
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                    <div style="margin-bottom: 15px;">
-                        <span style="font-size: 18px; font-weight: 900; color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 4px;">📖 Cerita Di Balik Saham {emiten_res}</span>
-                    </div>
-                    <p style="font-size: 16px; color: #334155; line-height: 1.6;">{analisa_teks}</p>
-                    
-                    <div style="margin-bottom: 15px; margin-top: 25px;">
-                        <span style="font-size: 18px; font-weight: 900; color: #0f172a; border-bottom: 2px solid #10b981; padding-bottom: 4px;">🎯 Strategi & Saran Tindakan</span>
-                    </div>
-                    <p style="font-size: 16px; color: #334155; line-height: 1.6; font-weight: 600;">{aksi_teks}</p>
-                </div>
-                """, unsafe_allow_html=True)
+<div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+  <div style="margin-bottom: 15px;">
+    <span style="font-size: 18px; font-weight: 900; color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 4px;">📖 Cerita Di Balik Saham {emiten_res}</span>
+  </div>
+  <p style="font-size: 16px; color: #334155; line-height: 1.6;">{analisa_teks}</p>
+  
+  <div style="margin-bottom: 15px; margin-top: 25px;">
+    <span style="font-size: 18px; font-weight: 900; color: #0f172a; border-bottom: 2px solid #10b981; padding-bottom: 4px;">🎯 Strategi & Saran Tindakan</span>
+  </div>
+  <p style="font-size: 16px; color: #334155; line-height: 1.6; font-weight: 600;">{aksi_teks}</p>
+</div>
+""", unsafe_allow_html=True)
                 
                 if not df_akumulasi_top5.empty:
                     broker_top = df_akumulasi_top5.iloc[0]['Broker']
@@ -1682,6 +1688,91 @@ elif st.session_state["menu_navigasi"] == "🕵️‍♂️ Deteksi Bandar Penuh
                         <span style="font-size: 15px; color: #92400e;">Broker dengan kode <strong>{broker_top}</strong> ({tipe_top}) adalah Dalang Utama yang belanja paling banyak hari ini. Terus awasi broker ini besok!</span>
                     </div>
                     """, unsafe_allow_html=True)
+
+# ==============================================================================
+# ⚡ MODE SCALPER PRO (BSJP)
+# ==============================================================================
+elif st.session_state["menu_navigasi"] == "⚡ Mode Scalper Pro (BSJP)":
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0f172a, #1e1b4b, #312e81); padding: 30px; border-radius: 12px; border-left: 8px solid #fbbf24; margin-bottom: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
+        <h2 style="color: #fbbf24; margin: 0; font-weight: 900; letter-spacing: 1px;">⚡ MODE SCALPER PRO V3</h2>
+        <p style="color: #cbd5e1; font-size: 15px; margin-top: 5px;">Fokus: Deteksi Akumulasi Bandar + Ketebalan Bid/Offer + Probabilitas BSJP (Beli Sore Jual Pagi).</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_scalp1, col_scalp2 = st.columns([1, 2])
+    with col_scalp1:
+        ticker_scalp = st.text_input("🎯 Masukkan Kode Saham:", value="CUAN").upper()
+        btn_scalp = st.button("🔥 SCAN MOMENTUM!", type="primary", use_container_width=True)
+
+    if btn_scalp:
+        st.info("Menganalisis momentum dan formasi orderbook...")
+        
+        # -------------------------------------------------------------------
+        # 🛠️ AREA INTEGRASI API ORDERBOOK (BID/OFFER)
+        # Karena yfinance tidak punya data orderbook IDX, Anda bisa mengganti
+        # bagian ini dengan endpoint API Invezgo/broker lain yang menyediakan Bid/Offer.
+        # Di bawah ini adalah logika kalkulasi probabilitasnya:
+        # -------------------------------------------------------------------
+        
+        # Simulasi tarikan data (Ganti dengan API Call asli Anda nantinya)
+        mock_total_bid_vol = 250000  # Total lot antrean beli
+        mock_total_offer_vol = 180000 # Total lot antrean jual
+        mock_rvol = 2.5 # Relative Volume (Volume hari ini 2.5x lipat dari rata-rata)
+        mock_bandar_akum_pct = 65.0 # Persentase dominasi bandar hari ini
+        
+        # 1. KALKULASI RASIO BID/OFFER (TEKANAN DEMAND)
+        if (mock_total_bid_vol + mock_total_offer_vol) > 0:
+            bid_power = (mock_total_bid_vol / (mock_total_bid_vol + mock_total_offer_vol)) * 100
+        else:
+            bid_power = 50.0
+
+        # 2. ALGORITMA PROBABILITAS SCALPER (Kombinasi 3 Indikator Utama)
+        # Bobot: 40% Bid/Offer, 40% Akumulasi Bandar, 20% Lonjakan Volume (RVOL)
+        skor_bo = bid_power * 0.40
+        skor_bandar = mock_bandar_akum_pct * 0.40
+        skor_vol = min((mock_rvol / 3.0) * 100, 100) * 0.20 # Max out di RVOL 3.0
+        
+        probabilitas_besok_naik = skor_bo + skor_bandar + skor_vol
+        
+        # Penyesuaian batas atas/bawah
+        probabilitas_besok_naik = max(min(probabilitas_besok_naik, 98.0), 5.0)
+
+        # 3. RENDER UI HASIL SCALPING
+        warna_prob = "#10b981" if probabilitas_besok_naik > 60 else ("#f59e0b" if probabilitas_besok_naik > 40 else "#ef4444")
+        keputusan = "HAJAR KANAN (HAKA) 🚀" if probabilitas_besok_naik > 65 else ("TUNGGU RETRACE ⏳" if probabilitas_besok_naik > 45 else "HINDARI / BUANG 🩸")
+
+        st.markdown(f"""
+        <div style="background: white; border: 2px solid {warna_prob}; border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h3 style="margin:0; color:#64748b; font-size:16px; text-transform:uppercase;">Probabilitas {ticker_scalp} Besok Naik</h3>
+                <h1 style="margin:0; color:{warna_prob}; font-size:55px; font-weight:900;">{probabilitas_besok_naik:.1f}%</h1>
+                <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 10px; background: #f1f5f9; display: inline-block; padding: 5px 20px; border-radius: 20px;">
+                    Aksi: {keputusan}
+                </div>
+            </div>
+            
+            <hr style="border-color: #e2e8f0;">
+            
+            <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 20px;">
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Bid (Demand)</div>
+                    <div style="font-size: 22px; font-weight: 900; color: #10b981;">{mock_total_bid_vol:,} Lot</div>
+                    <div style="font-size: 13px; font-weight: bold; color: #064e3b; background: #d1fae5; border-radius: 10px; margin: 5px 20px;">{bid_power:.1f}%</div>
+                </div>
+                <div style="flex: 1; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Dominasi Bandar</div>
+                    <div style="font-size: 22px; font-weight: 900; color: #3b82f6;">{mock_bandar_akum_pct:.1f}%</div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Top 5 Akumulasi</div>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; color: #64748b; font-weight: bold;">Ketebalan Offer (Supply)</div>
+                    <div style="font-size: 22px; font-weight: 900; color: #ef4444;">{mock_total_offer_vol:,} Lot</div>
+                    <div style="font-size: 13px; font-weight: bold; color: #7f1d1d; background: #fee2e2; border-radius: 10px; margin: 5px 20px;">{100 - bid_power:.1f}%</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # 4. MENU PENGATURAN API
 elif st.session_state["menu_navigasi"] == "⚙️ Pengaturan Kode Rahasia":
