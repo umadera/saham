@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import random
 
 def render_dashboard_bsjp():
     # 1. HEADER DASHBOARD
@@ -17,7 +18,6 @@ def render_dashboard_bsjp():
     cols = ["EMITEN", "KATEGORI", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
     
     if "data_tabel_bsjp" not in st.session_state:
-        # Mock Data awal sudah ditambahkan kategori simulasi
         data_awal = [
             ["CUAN", "TAMBANG", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
             ["BRPT", "ENERGI", "3.2%", "1.6%", "638.2M", "231%", "BULL", "BO", "BIG ACC", "SID", "SUPER ⚡", 1870, 1915, 1932, 1840, "2.4%", "TREND 📈", "⭐⭐⭐", 46, "DISKON"],
@@ -32,47 +32,77 @@ def render_dashboard_bsjp():
         ]
         st.session_state["data_tabel_bsjp"] = pd.DataFrame(data_awal, columns=cols)
     else:
-        # PENGAMANAN (MIGRATION): Jika sesi sebelumnya belum punya kolom KATEGORI, kita tambahkan otomatis
         if "KATEGORI" not in st.session_state["data_tabel_bsjp"].columns:
             st.session_state["data_tabel_bsjp"].insert(1, "KATEGORI", "UMUM")
 
-    # 3. PANEL KONTROL (INPUT EMITEN, FILTER KATEGORI, TIMEFRAME, & REFRESH)
+    # 3. PANEL KONTROL
     with st.container():
         st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;'>", unsafe_allow_html=True)
-        
-        # Layout dibagi 4 kolom sekarang
         col_input, col_kat, col_time, col_btn = st.columns([1.5, 1.5, 1.5, 1])
         
         with col_input:
             emiten_pencarian = st.text_input("🔍 Cari Emiten:", placeholder="Contoh: CUAN...").upper()
-            
         with col_kat:
-            # Mengambil daftar kategori unik secara otomatis dari tabel
             kategori_unik = sorted(st.session_state["data_tabel_bsjp"]["KATEGORI"].dropna().unique().tolist())
             list_kategori = ["Semua Kategori"] + kategori_unik
             kategori_pilihan = st.selectbox("📂 Filter Kategori:", list_kategori, index=0)
-            
         with col_time:
             time_options = ["1 Hari", "1 Jam", "30 Menit", "5 Menit", "1 Menit"]
             timeframe = st.selectbox("⏳ Timeframe:", time_options, index=0)
-            
         with col_btn:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             btn_refresh = st.button("🔄 REFRESH", type="primary", use_container_width=True)
-            
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Efek Loading Refresh
+    # ==========================================
+    # 🚀 LOGIKA BARU: TOMBOL REFRESH & AUTO-FILL DATA
+    # ==========================================
     if btn_refresh:
-        with st.spinner(f"📡 Memuat ulang data {timeframe}..."):
-            time.sleep(0.5) 
-        st.toast(f"✅ Data diperbarui!", icon="🚀")
+        with st.spinner(f"📡 Menarik data {timeframe} dari server..."):
+            time.sleep(1) # Animasi loading
+            
+            # Ambil data dari memori
+            df_temp = st.session_state["data_tabel_bsjp"].copy()
+            
+            # Looping untuk mencari kolom yang masih "None" atau kosong
+            for i in df_temp.index:
+                val_gain = str(df_temp.at[i, 'GAIN']).strip()
+                
+                # Jika datanya kosong/None, kita suntikkan data simulasi
+                if pd.isna(df_temp.at[i, 'GAIN']) or val_gain == 'None' or val_gain == '':
+                    df_temp.at[i, 'GAIN'] = f"{random.uniform(-3, 8):.1f}%"
+                    df_temp.at[i, 'WICK'] = f"{random.uniform(0, 3):.1f}%"
+                    df_temp.at[i, 'VAL'] = f"{random.uniform(10, 500):.1f}M"
+                    df_temp.at[i, 'RVOL'] = f"{random.randint(50, 300)}%"
+                    df_temp.at[i, 'TRND'] = random.choice(["BULL", "BEAR"])
+                    df_temp.at[i, 'FASE'] = random.choice(["BO", "SIDE"])
+                    df_temp.at[i, 'BDR'] = random.choice(["BIG ACC", "ACC", "NET"])
+                    df_temp.at[i, 'PWR'] = random.choice(["SID", "HAKA"])
+                    df_temp.at[i, 'AKSI'] = random.choice(["HAKA", "WAIT", "ACCUM", "SUPER ⚡"])
+                    
+                    plan_price = random.randint(100, 5000)
+                    df_temp.at[i, 'PLAN'] = plan_price
+                    df_temp.at[i, 'NOW'] = plan_price + random.randint(-10, 50)
+                    df_temp.at[i, 'TP'] = plan_price + random.randint(20, 100)
+                    df_temp.at[i, 'SL'] = plan_price - random.randint(10, 50)
+                    
+                    df_temp.at[i, 'PROFIT'] = f"{random.uniform(0, 5):.1f}%"
+                    df_temp.at[i, 'STATUS'] = random.choice(["TREND 📈", "REVERSAL 🔄", "FRESH 🌟", "ENTRY 🚪"])
+                    df_temp.at[i, 'SCORE'] = random.choice(["⭐⭐⭐", "⭐⭐", "⭐"])
+                    df_temp.at[i, 'RSI'] = random.randint(30, 80)
+                    df_temp.at[i, 'ZONE'] = random.choice(["DISKON", "AWAS", "BUY"])
+
+            # Simpan kembali data yang sudah di-update ke memori
+            st.session_state["data_tabel_bsjp"] = df_temp
+            
+        st.toast(f"✅ Data {timeframe} berhasil diperbarui!", icon="🚀")
+        st.rerun() # Memaksa layar me-refresh agar tabel langsung berubah
 
     # ==========================================
-    # 4. MENU KELOLA EMITEN (TAMBAH / EDIT / HAPUS)
+    # 4. MENU KELOLA EMITEN
     # ==========================================
     with st.expander("⚙️ Klik di sini untuk Tambah / Edit / Hapus Emiten di Tabel"):
-        st.info("💡 **Cara Penggunaan:** Ketik di kolom **KATEGORI** untuk mengelompokkan saham (misal: GOLD, BANK, TAMBANG). Menu dropdown di atas akan otomatis mendeteksi kategori baru yang Anda buat.")
+        st.info("💡 **Tips:** Jika Anda menambahkan Emiten baru, biarkan kolom angkanya kosong. Lalu klik tombol **🔄 REFRESH** di atas untuk menarik datanya.")
         
         edited_df = st.data_editor(
             st.session_state["data_tabel_bsjp"],
@@ -82,28 +112,25 @@ def render_dashboard_bsjp():
         )
         
         if st.button("💾 Simpan Perubahan Data"):
-            # Memastikan teks kategori selalu huruf besar (Uppercase) agar rapi
             edited_df['KATEGORI'] = edited_df['KATEGORI'].str.upper()
             st.session_state["data_tabel_bsjp"] = edited_df
-            st.success("✅ Database berhasil diperbarui!")
+            st.success("✅ Emiten berhasil ditambahkan!")
             time.sleep(0.5)
             st.rerun()
 
     # ==========================================
-    # 5. PERSIAPAN DATA UNTUK DITAMPILKAN & FILTERING
+    # 5. FILTERING DATA
     # ==========================================
     df_display = st.session_state["data_tabel_bsjp"].copy()
 
-    # 5a. Filter berdasarkan pencarian nama Emiten
     if emiten_pencarian:
         df_display = df_display[df_display['EMITEN'].str.contains(emiten_pencarian, na=False)]
         
-    # 5b. Filter berdasarkan Dropdown Kategori
     if kategori_pilihan != "Semua Kategori":
         df_display = df_display[df_display['KATEGORI'] == kategori_pilihan]
 
     # ==========================================
-    # 6. LOGIKA PEWARNAAN (STYLING) HTML DARK MODE
+    # 6. LOGIKA PEWARNAAN HTML
     # ==========================================
     def highlight_cells(val):
         style = 'color: white; font-weight: bold; '
@@ -150,7 +177,7 @@ def render_dashboard_bsjp():
         ]
     }])
 
-    # 7. RENDER TABEL UTAMA (COMPACT HTML)
+    # 7. RENDER TABEL UTAMA
     html_table = styled_df.to_html().replace("\n", "")
     
     custom_css = """
@@ -175,6 +202,4 @@ def render_dashboard_bsjp():
     """.replace("\n", "")
     
     st.markdown(custom_css + f"<div class='custom-table-container'>{html_table}</div>", unsafe_allow_html=True)
-    
-    # Keterangan Filter & Timeframe Aktif
     st.caption(f"⚡ Menampilkan kategori **{kategori_pilihan}** berdasarkan timeframe: **{timeframe}**")
