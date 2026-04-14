@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def render_dashboard_bsjp():
+    # 1. HEADER DASHBOARD
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0f172a, #1e1b4b, #312e81); padding: 20px 30px; border-radius: 12px; border-left: 8px solid #fbbf24; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
         <h2 style="color: #fbbf24; margin: 0; font-weight: 900; letter-spacing: 1px;">⚡ HIGH PROB SCREENER V7 - MODE BSJP</h2>
@@ -9,9 +10,22 @@ def render_dashboard_bsjp():
     </div>
     """, unsafe_allow_html=True)
 
+    # 2. PANEL KONTROL (INPUT EMITEN & TIMEFRAME)
+    with st.container():
+        st.markdown("<div style='background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px;'>", unsafe_allow_html=True)
+        col_input, col_time = st.columns([1, 1])
+        
+        with col_input:
+            emiten_bsjp = st.text_input("🔍 Cari Emiten Khusus:", placeholder="Contoh: BREN, CUAN...").upper()
+        
+        with col_time:
+            time_options = ["1 Hari", "1 Jam", "30 Menit", "5 Menit", "1 Menit"]
+            timeframe = st.selectbox("⏳ Pilih Timeframe:", time_options, index=0)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
     # ==========================================
-    # 1. MOCK DATA (Simulasi Data seperti di Gambar)
-    # Nanti Anda bisa ganti data ini dengan tarikan API atau Database Anda
+    # 3. MOCK DATA (Simulasi Data)
     # ==========================================
     data = [
         ["CUAN", "5.9%", "1.5%", "750.3M", "165%", "BEAR", "BO", "ACC", "SID", "HAKA", 1300, 1345, 1360, 1270, "3.5%", "TREND 📈", "⭐⭐⭐", 52, "DISKON"],
@@ -29,39 +43,40 @@ def render_dashboard_bsjp():
     cols = ["EMITEN", "GAIN", "WICK", "VAL", "RVOL", "TRND", "FASE", "BDR", "PWR", "AKSI", "PLAN", "NOW", "TP", "SL", "PROFIT", "STATUS", "SCORE", "RSI", "ZONE"]
     df = pd.DataFrame(data, columns=cols)
 
+    # Logika Filter Emiten
+    if emiten_bsjp:
+        df = df[df['EMITEN'].str.contains(emiten_bsjp)]
+
     # ==========================================
-    # 2. LOGIKA PEWARNAAN (STYLING)
+    # 4. LOGIKA PEWARNAAN (STYLING)
     # ==========================================
     def highlight_cells(val):
         style = 'color: white; font-weight: bold; '
         val_str = str(val).upper()
         
-        # Pewarnaan Background Dasar
-        if val_str == 'BULL': style += 'background-color: #059669;' # Hijau Gelap
-        elif val_str == 'BEAR': style += 'background-color: #b91c1c;' # Merah Gelap
-        elif val_str == 'BO' or val_str == 'BIG ACC': style += 'background-color: #eab308; color: black;' # Kuning Emas
-        elif val_str == 'SIDE' or val_str == 'NET': style += 'background-color: #334155;' # Abu-abu
-        elif val_str == 'ACC' or val_str == 'HAKA': style += 'background-color: #16a34a;' # Hijau Terang
-        elif val_str == 'SID' or val_str == 'WAIT': style += 'background-color: #1e293b;' # Biru Dongker Gelap
-        elif 'SUPER' in val_str or 'S-ACCUM' in val_str: style += 'background-color: #0f766e;' # Teal
-        elif val_str == 'ACCUM': style += 'background-color: #2563eb;' # Biru
+        if val_str == 'BULL': style += 'background-color: #059669;' 
+        elif val_str == 'BEAR': style += 'background-color: #b91c1c;' 
+        elif val_str == 'BO' or val_str == 'BIG ACC': style += 'background-color: #eab308; color: black;' 
+        elif val_str == 'SIDE' or val_str == 'NET': style += 'background-color: #334155;' 
+        elif val_str == 'ACC' or val_str == 'HAKA': style += 'background-color: #16a34a;' 
+        elif val_str == 'SID' or val_str == 'WAIT': style += 'background-color: #1e293b;' 
+        elif 'SUPER' in val_str or 'S-ACCUM' in val_str: style += 'background-color: #0f766e;' 
+        elif val_str == 'ACCUM': style += 'background-color: #2563eb;' 
         
-        # Pewarnaan Teks Angka
         elif '%' in val_str and not any(c.isalpha() for c in val_str):
-            num = float(val_str.replace('%', ''))
-            if num > 0: style += 'color: #34d399;' # Teks Hijau
-            elif num < 0: style += 'color: #f87171;' # Teks Merah
-            else: style += 'color: #cbd5e1;'
+            try:
+                num = float(val_str.replace('%', ''))
+                if num > 0: style += 'color: #34d399;' 
+                elif num < 0: style += 'color: #f87171;' 
+            except: pass
             
         return style
 
-    # Gunakan fungsi yang aman untuk semua versi Pandas
     if hasattr(df.style, 'map'):
         styled_df = df.style.map(highlight_cells)
     else:
         styled_df = df.style.applymap(highlight_cells)
 
-    # Styling Table keseluruhan agar persis seperti gambar (Dark Theme)
     styled_df = styled_df.set_properties(**{
         'background-color': '#0f172a',
         'color': '#f8fafc',
@@ -80,17 +95,9 @@ def render_dashboard_bsjp():
         ]
     }])
 
+    # 5. RENDER TABEL (COMPACT HTML)
+    html_table = styled_df.to_html().replace("\n", "")
     
-# ==========================================
-    # 3. RENDER TABEL SEBAGAI HTML CUSTOM
-    # Ini memastikan tabel terlihat 'rapat' ala TradingView
-    # ==========================================
-    html_table = styled_df.to_html()
-    
-    # 🔴 TAMBAHAN KRUSIAL: Hapus semua "enter" (newline) agar tidak dibaca sebagai teks oleh Streamlit
-    html_table = html_table.replace("\n", "") 
-    
-    # CSS Tambahan agar tabel responsive & tidak ada jarak putih
     custom_css = """
     <style>
     .custom-table-container {
@@ -109,6 +116,9 @@ def render_dashboard_bsjp():
         white-space: nowrap;
     }
     </style>
-    """.replace("\n", "") # 🔴 Hapus enter di CSS juga
+    """.replace("\n", "")
     
     st.markdown(custom_css + f"<div class='custom-table-container'>{html_table}</div>", unsafe_allow_html=True)
+    
+    # Keterangan Timeframe Aktif
+    st.caption(f"⚡ Menampilkan data berdasarkan timeframe: {timeframe}")
